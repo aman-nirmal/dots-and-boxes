@@ -28,15 +28,13 @@ function startTurnTimer(roomCode) {
             
             const currentPlayer = room.players[room.currentTurnIndex || 0];
             
-            // AFK Tracking Logic
+            // AFK Tracking
             if (currentPlayer && !currentPlayer.isDead) {
                 currentPlayer.afkCount = (currentPlayer.afkCount || 0) + 1;
                 
-                // Kick if AFK 3 times
                 if (currentPlayer.afkCount >= 3) {
                     currentPlayer.isDead = true;
                     const aliveCount = room.players.filter(p => !p.isDead).length;
-                    
                     io.to(roomCode).emit('playerLeft', { playerId: currentPlayer.id, reason: 'afk' });
                     
                     if (aliveCount <= 1) {
@@ -44,12 +42,13 @@ function startTurnTimer(roomCode) {
                         if (winner) io.to(roomCode).emit('playerWonByDefault', winner);
                         stopTurnTimer(roomCode);
                     }
-                    return; // Stop here. The clients will advance the turn and sync to restart the timer.
+                    return; 
                 }
             }
 
             // Auto-move if not kicked
             if (room.availableLines && room.availableLines.length > 0) {
+                room.moveLocked = true; // Prevent overlapping clicks
                 const randomIndex = Math.floor(Math.random() * room.availableLines.length);
                 const randomLineId = room.availableLines.splice(randomIndex, 1)[0];
                 room.moveHistory.push(randomLineId);
@@ -65,12 +64,12 @@ function stopTurnTimer(roomCode) {
 
 io.on('connection', (socket) => {
     
-    // Core Room Management
     socket.on('createGame', (userData) => {
         const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
         const sessionId = Math.random().toString(36).substring(2, 15);
         rooms[roomCode] = { 
-            boardSize: userData.boardSize, started: false, moveHistory: [], availableLines: [], timerInterval: null, timeLeft: 15, currentTurnIndex: 0,
+            boardSize: userData.boardSize, started: false, moveHistory: [], availableLines: [], 
+            timerInterval: null, timeLeft: 15, currentTurnIndex: 0, moveLocked: false,
             players: [{ id: socket.id, sessionId, name: userData.name, color: userData.color, afkCount: 0, isDead: false }] 
         };
         socket.join(roomCode);
@@ -99,7 +98,6 @@ io.on('connection', (socket) => {
         io.to(roomCode).emit('lobbyUpdated', { roomCode, hostId: room.players[0].id, players: room.players });
     });
 
-    // Reconnection and Leaving
     socket.on('rejoinGame', (data) => {
         const room = rooms[data.roomCode];
         if (room) {
@@ -138,11 +136,11 @@ io.on('connection', (socket) => {
         socket.leave(roomCode);
     });
 
-    // Gameplay Systems
     socket.on('startGame', (roomCode) => {
         const room = rooms[roomCode];
         if (room) {
-            room.started = true; room.moveHistory = []; room.availableLines = []; room.currentTurnIndex = 0;
+            room.started = true; room.moveHistory = []; room.availableLines = []; 
+            room.currentTurnIndex = 0; room.moveLocked = false;
             for (let r = 0; r < room.boardSize; r++) {
                 for (let c = 0; c < room.boardSize; c++) {
                     if (c < room.boardSize - 1) room.availableLines.push(`h-${r}-${c}`);
@@ -156,8 +154,10 @@ io.on('connection', (socket) => {
 
     socket.on('makeMove', ({ roomCode, lineId }) => {
         const room = rooms[roomCode];
-        if (room && room.availableLines.includes(lineId)) {
-            // Reset AFK counter because the player successfully moved
+        if (room && !room.moveLocked && room.availableLines.includes(lineId)) {
+            room.moveLocked = true; 
+            stopTurnTimer(roomCode); 
+            
             const pIndex = room.players.findIndex(p => p.id === socket.id);
             if (pIndex !== -1) room.players[pIndex].afkCount = 0;
 
@@ -167,10 +167,10 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Validates turn cycling to restart timer accurately
     socket.on('syncTurn', ({ roomCode, turnIndex }) => {
         const room = rooms[roomCode];
         if (room) {
+            room.moveLocked = false; 
             room.currentTurnIndex = turnIndex;
             startTurnTimer(roomCode);
         }

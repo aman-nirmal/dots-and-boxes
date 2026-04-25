@@ -9,10 +9,16 @@ let currentRoom = ''; let mySessionId = ''; let roomPlayers = []; let scores = [
 let myPlayerIndex = -1; let myName = ''; let myColor = '#000';
 let currentTurnIndex = 0; let dotsCount = 10; let boxesCount = 9; 
 
-// --- AUDIO ---
+// --- AUDIO SYSTEM ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+// Wakes up audio instantly on first click
+document.addEventListener('click', () => {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+}, { once: true });
+
 function playSound(type) {
-    if (audioCtx.state === 'suspended') return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
     osc.connect(gain); gain.connect(audioCtx.destination);
     if (type === 'draw') {
@@ -46,14 +52,12 @@ window.onload = () => {
 
 // --- NETWORK EVENTS ---
 document.getElementById('host-btn').addEventListener('click', () => { 
-    if (audioCtx.state === 'suspended') audioCtx.resume();
     myName = document.getElementById('player-name').value || 'P1'; myColor = document.getElementById('player-color').value;
     const boardSize = parseInt(document.getElementById('board-size').value);
     socket.emit('createGame', { name: myName, color: myColor, boardSize }); 
 });
 
 document.getElementById('join-btn').addEventListener('click', () => {
-    if (audioCtx.state === 'suspended') audioCtx.resume();
     const code = document.getElementById('room-input').value.toUpperCase();
     myName = document.getElementById('player-name').value || 'Player'; myColor = document.getElementById('player-color').value;
     if (code.length > 0) socket.emit('joinGame', { roomCode: code, name: myName, color: myColor });
@@ -132,7 +136,6 @@ socket.on('playerLeft', (data) => {
             advanceTurn();
             updateUI();
             
-            // First alive player tells server to restart the timer
             const firstAlive = roomPlayers.find(p => !p.isDead);
             if (firstAlive && socket.id === firstAlive.id) {
                 socket.emit('syncTurn', { roomCode: currentRoom, turnIndex: currentTurnIndex });
@@ -176,38 +179,69 @@ function resetLocalGame() {
     initBoard(); updateUI();
 }
 
+// REPLACE THIS FUNCTION IN app.js
+
 function initBoard() {
-    const container = document.querySelector('.board-container'); container.innerHTML = ''; 
+    const container = document.querySelector('.board-container'); 
+    container.innerHTML = ''; 
     
-    // EXACT MATH FROM ORIGINAL 2-PLAYER CODE
-    const spacing = 40;   
-    const dotSize = 8; const lineThickness = 6; 
+    const dotSize = 8; 
+    const lineThickness = 6; 
+
+    // Find the maximum safe width for the current screen
+    const maxSafeWidth = window.innerWidth > 500 ? 400 : window.innerWidth - 40;
     
-    container.style.width = `${spacing * dotsCount}px`; container.style.height = `${spacing * dotsCount}px`;
+    // DYNAMIC SPACING: Calculate exactly how much space we have per dot
+    let spacing = Math.floor((maxSafeWidth - dotSize) / (dotsCount - 1));
+    
+    // Cap the spacing so smaller grids (like 6x6) don't become comically huge
+    if (spacing > 40) spacing = 40; 
+    
+    // Sync the CSS background graph paper to our newly calculated spacing
+    document.documentElement.style.setProperty('--grid-size', `${spacing}px`);
+    
+    // Set the exact physical width of the container
+    const exactWidth = (spacing * (dotsCount - 1)) + dotSize;
+    container.style.width = `${exactWidth}px`; 
+    container.style.height = `${exactWidth}px`;
 
     for (let r = 0; r < dotsCount; r++) {
         for (let c = 0; c < dotsCount; c++) {
-            const dot = document.createElement('div'); dot.className = 'dot'; dot.style.left = `${c * spacing}px`; dot.style.top = `${r * spacing}px`; container.appendChild(dot);
+            const dot = document.createElement('div'); dot.className = 'dot'; 
+            dot.style.left = `${c * spacing}px`; 
+            dot.style.top = `${r * spacing}px`; 
+            container.appendChild(dot);
             
             if (c < dotsCount - 1) {
                 const hLine = document.createElement('div'); hLine.className = 'line h-line'; hLine.id = `h-${r}-${c}`; 
-                hLine.style.left = `${c * spacing + dotSize}px`; hLine.style.top = `${r * spacing + (dotSize - lineThickness)/2}px`; 
+                hLine.style.left = `${(c * spacing) + dotSize}px`; 
+                hLine.style.top = `${(r * spacing) + (dotSize - lineThickness) / 2}px`; 
                 hLine.style.width = `${spacing - dotSize}px`; hLine.style.height = `${lineThickness}px`; 
                 setupLineClick(hLine); container.appendChild(hLine);
             }
             if (r < dotsCount - 1) {
                 const vLine = document.createElement('div'); vLine.className = 'line v-line'; vLine.id = `v-${r}-${c}`; 
-                vLine.style.left = `${c * spacing + (dotSize - lineThickness)/2}px`; vLine.style.top = `${r * spacing + dotSize}px`; 
+                vLine.style.left = `${(c * spacing) + (dotSize - lineThickness) / 2}px`; 
+                vLine.style.top = `${(r * spacing) + dotSize}px`; 
                 vLine.style.width = `${lineThickness}px`; vLine.style.height = `${spacing - dotSize}px`; 
                 setupLineClick(vLine); container.appendChild(vLine);
             }
             if (r < dotsCount - 1 && c < dotsCount - 1) {
                 const box = document.createElement('div'); box.className = 'box'; box.id = `box-${r}-${c}`; 
-                box.style.left = `${c * spacing + dotSize}px`; box.style.top = `${r * spacing + dotSize}px`; 
-                box.style.width = `${spacing - dotSize}px`; box.style.height = `${spacing - dotSize}px`; container.appendChild(box);
+                box.style.left = `${(c * spacing) + dotSize}px`; 
+                box.style.top = `${(r * spacing) + dotSize}px`; 
+                box.style.width = `${spacing - dotSize}px`; box.style.height = `${spacing - dotSize}px`; 
+                container.appendChild(box);
             }
         }
     }
+
+    setTimeout(() => {
+        const rect = container.getBoundingClientRect();
+        const offsetX = rect.left + (dotSize / 2);
+        const offsetY = rect.top + (dotSize / 2);
+        document.body.style.backgroundPosition = `${offsetX}px ${offsetY}px`;
+    }, 50);
 }
 
 function setupLineClick(line) {
