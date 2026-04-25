@@ -45,11 +45,21 @@
                 <ul id="lobby-player-list" class="player-list"></ul>
                 <p id="waiting-msg" class="waiting-text">Waiting for host to start...</p>
                 <button id="start-game-btn" class="primary-btn hidden w-full">Start Game</button>
+                <button id="leave-lobby-btn" class="secondary-btn w-full" style="margin-top: 10px;">Leave Lobby</button>
             </div>
         </div>
 
         <div id="game-screen" class="panel hidden">
             
+            <div class="game-header">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <div class="status-badge">
+                        <span id="turn-display">Waiting...</span> | <span id="timer-display" style="color:#ef4444;">15s</span>
+                    </div>
+                    <button id="leave-game-btn" class="secondary-btn" style="padding: 8px 12px; font-size: 0.9rem;">Exit</button>
+                </div>
+            </div>
+
             <div class="scoreboard">
                 <div class="side-scores left-scores">
                     <div class="score-card p-0" id="card-p0">
@@ -60,11 +70,6 @@
                         <span id="name-p2" class="name">P3</span>
                         <span id="score-p2" class="score">0</span>
                     </div>
-                </div>
-
-                <div class="turn-indicator">
-                    <span id="turn-display">Waiting...</span>
-                    <div id="timer-display" style="color: #ef4444; font-size: 1.5rem; margin-top: 5px;">15s</div>
                 </div>
 
                 <div class="side-scores right-scores">
@@ -85,7 +90,7 @@
                     <h2 id="winner-text">Player Wins!</h2>
                     <div id="final-scores-list" class="final-scores"></div>
                     <button id="rematch-btn" class="primary-btn w-full" style="margin-bottom:10px;">Play Again</button>
-                    <button id="leave-btn" class="secondary-btn w-full">Leave Room</button>
+                    <button id="leave-modal-btn" class="secondary-btn w-full">Leave Room</button>
                 </div>
             </div>
         </div>

@@ -60,9 +60,18 @@ document.getElementById('join-btn').addEventListener('click', () => {
 });
 
 document.getElementById('start-game-btn').addEventListener('click', () => socket.emit('startGame', currentRoom));
-document.getElementById('leave-btn').addEventListener('click', () => { localStorage.removeItem('dotsGame'); location.reload(); });
-socket.on('errorMsg', (msg) => { document.getElementById('error-msg').innerText = msg; localStorage.removeItem('dotsGame'); });
 
+// LEAVE SYSTEM
+function leaveGame() {
+    if (currentRoom) socket.emit('leaveRoom', currentRoom);
+    localStorage.removeItem('dotsGame'); 
+    location.reload(); 
+}
+document.getElementById('leave-lobby-btn').addEventListener('click', leaveGame);
+document.getElementById('leave-game-btn').addEventListener('click', leaveGame);
+document.getElementById('leave-modal-btn').addEventListener('click', leaveGame);
+
+socket.on('errorMsg', (msg) => { document.getElementById('error-msg').innerText = msg; localStorage.removeItem('dotsGame'); });
 socket.on('gameCreated', (data) => { mySessionId = data.sessionId; currentRoom = data.roomCode; saveSession(); });
 socket.on('joinSuccess', (data) => { mySessionId = data.sessionId; });
 
@@ -112,6 +121,34 @@ socket.on('spectatorJoined', (data) => {
     if(data.moveHistory) data.moveHistory.forEach(lineId => processMove(lineId, true));
 });
 
+// DROPOUT & AFK HANDLING
+socket.on('playerLeft', (data) => {
+    const pIndex = roomPlayers.findIndex(p => p.id === data.playerId);
+    if (pIndex !== -1) {
+        roomPlayers[pIndex].isDead = true;
+        document.getElementById(`card-p${pIndex}`).classList.add('dead');
+        
+        if (currentTurnIndex === pIndex) {
+            advanceTurn();
+            updateUI();
+            
+            // First alive player tells server to restart the timer
+            const firstAlive = roomPlayers.find(p => !p.isDead);
+            if (firstAlive && socket.id === firstAlive.id) {
+                socket.emit('syncTurn', { roomCode: currentRoom, turnIndex: currentTurnIndex });
+            }
+        }
+    }
+});
+
+socket.on('playerWonByDefault', (winner) => {
+    const winnerText = document.getElementById('winner-text');
+    winnerText.innerText = `${winner.name} Wins by Default!`;
+    winnerText.style.color = winner.color;
+    document.getElementById('game-over-modal').classList.remove('hidden');
+    localStorage.removeItem('dotsGame'); 
+});
+
 socket.on('receiveMove', (lineId) => { processMove(lineId, false); });
 socket.on('timerUpdate', (timeLeft) => { timerText.innerText = `${timeLeft}s`; timerText.style.color = timeLeft <= 5 ? '#ef4444' : 'var(--ink-dark)'; });
 document.getElementById('rematch-btn').addEventListener('click', () => { if(myPlayerIndex !== -1) socket.emit('requestRematch', currentRoom); });
@@ -126,10 +163,12 @@ function resetLocalGame() {
     
     for (let i = 0; i < 4; i++) {
         const card = document.getElementById(`card-p${i}`);
+        card.classList.remove('dead');
         if (i < roomPlayers.length) {
             card.classList.remove('hidden');
             document.getElementById(`name-p${i}`).innerText = roomPlayers[i].name;
             document.getElementById(`score-p${i}`).innerText = "0";
+            if(roomPlayers[i].isDead) card.classList.add('dead');
         } else {
             card.classList.add('hidden');
         }
@@ -138,65 +177,50 @@ function resetLocalGame() {
 }
 
 function initBoard() {
-    const container = document.querySelector('.board-container'); 
-    container.innerHTML = ''; 
-
-    // EXACT MATH FROM YOUR ORIGINAL 2-PLAYER CODE
-    const spacing = 40;   
-    const dotSize = 8; 
-    const lineThickness = 6; 
+    const container = document.querySelector('.board-container'); container.innerHTML = ''; 
     
-    container.style.width = `${spacing * dotsCount}px`; 
-    container.style.height = `${spacing * dotsCount}px`;
+    // EXACT MATH FROM ORIGINAL 2-PLAYER CODE
+    const spacing = 40;   
+    const dotSize = 8; const lineThickness = 6; 
+    
+    container.style.width = `${spacing * dotsCount}px`; container.style.height = `${spacing * dotsCount}px`;
 
     for (let r = 0; r < dotsCount; r++) {
         for (let c = 0; c < dotsCount; c++) {
-            const dot = document.createElement('div');
-            dot.className = 'dot';
-            dot.style.left = `${c * spacing}px`; 
-            dot.style.top = `${r * spacing}px`;
-            container.appendChild(dot);
-
-            if (c < dotsCount - 1) {
-                const hLine = document.createElement('div');
-                hLine.className = 'line h-line'; hLine.id = `h-${r}-${c}`;
-                hLine.style.left = `${c * spacing + dotSize}px`; 
-                hLine.style.top = `${r * spacing + (dotSize - lineThickness)/2}px`;
-                hLine.style.width = `${spacing - dotSize}px`; 
-                hLine.style.height = `${lineThickness}px`;
-                setupLineClick(hLine); 
-                container.appendChild(hLine);
-            }
-
-            if (r < dotsCount - 1) {
-                const vLine = document.createElement('div');
-                vLine.className = 'line v-line'; vLine.id = `v-${r}-${c}`;
-                vLine.style.left = `${c * spacing + (dotSize - lineThickness)/2}px`; 
-                vLine.style.top = `${r * spacing + dotSize}px`;
-                vLine.style.width = `${lineThickness}px`; 
-                vLine.style.height = `${spacing - dotSize}px`;
-                setupLineClick(vLine); 
-                container.appendChild(vLine);
-            }
+            const dot = document.createElement('div'); dot.className = 'dot'; dot.style.left = `${c * spacing}px`; dot.style.top = `${r * spacing}px`; container.appendChild(dot);
             
+            if (c < dotsCount - 1) {
+                const hLine = document.createElement('div'); hLine.className = 'line h-line'; hLine.id = `h-${r}-${c}`; 
+                hLine.style.left = `${c * spacing + dotSize}px`; hLine.style.top = `${r * spacing + (dotSize - lineThickness)/2}px`; 
+                hLine.style.width = `${spacing - dotSize}px`; hLine.style.height = `${lineThickness}px`; 
+                setupLineClick(hLine); container.appendChild(hLine);
+            }
+            if (r < dotsCount - 1) {
+                const vLine = document.createElement('div'); vLine.className = 'line v-line'; vLine.id = `v-${r}-${c}`; 
+                vLine.style.left = `${c * spacing + (dotSize - lineThickness)/2}px`; vLine.style.top = `${r * spacing + dotSize}px`; 
+                vLine.style.width = `${lineThickness}px`; vLine.style.height = `${spacing - dotSize}px`; 
+                setupLineClick(vLine); container.appendChild(vLine);
+            }
             if (r < dotsCount - 1 && c < dotsCount - 1) {
-                const box = document.createElement('div');
-                box.className = 'box'; box.id = `box-${r}-${c}`;
-                box.style.left = `${c * spacing + dotSize}px`; 
-                box.style.top = `${r * spacing + dotSize}px`;
-                box.style.width = `${spacing - dotSize}px`; 
-                box.style.height = `${spacing - dotSize}px`;
-                container.appendChild(box);
+                const box = document.createElement('div'); box.className = 'box'; box.id = `box-${r}-${c}`; 
+                box.style.left = `${c * spacing + dotSize}px`; box.style.top = `${r * spacing + dotSize}px`; 
+                box.style.width = `${spacing - dotSize}px`; box.style.height = `${spacing - dotSize}px`; container.appendChild(box);
             }
         }
     }
 }
 
-function setupLineClick(lineElement) {
-    lineElement.addEventListener('click', () => {
-        if (myPlayerIndex === -1 || currentTurnIndex !== myPlayerIndex || lineElement.dataset.claimed === "true") return;
-        socket.emit('makeMove', { roomCode: currentRoom, lineId: lineElement.id });
+function setupLineClick(line) {
+    line.addEventListener('click', () => {
+        if (myPlayerIndex === -1 || currentTurnIndex !== myPlayerIndex || line.dataset.claimed === "true") return;
+        socket.emit('makeMove', { roomCode: currentRoom, lineId: line.id });
     });
+}
+
+function advanceTurn() {
+    do {
+        currentTurnIndex = (currentTurnIndex + 1) % roomPlayers.length;
+    } while (roomPlayers[currentTurnIndex].isDead);
 }
 
 function processMove(lineId, isReplay) {
@@ -204,20 +228,25 @@ function processMove(lineId, isReplay) {
     const line = document.getElementById(lineId); 
     if(!line) return;
     
-    line.classList.add(`claimed-p${playerIndex}`); 
-    line.dataset.claimed = "true";
+    line.classList.add(`claimed-p${playerIndex}`); line.dataset.claimed = "true";
     if (!isReplay) playSound('draw');
     
     let boxesScored = calculateBoxes(lineId, playerIndex);
     if (boxesScored > 0) {
-        if (!isReplay) playSound('box'); 
-        scores[playerIndex] += boxesScored;
+        if (!isReplay) playSound('box'); scores[playerIndex] += boxesScored;
     } else {
-        currentTurnIndex = (currentTurnIndex + 1) % roomPlayers.length;
+        advanceTurn();
     }
     
     updateUI(); 
-    if (!isReplay) checkWinCondition();
+    
+    if (!isReplay) {
+        checkWinCondition();
+        const firstAlive = roomPlayers.find(p => !p.isDead);
+        if (firstAlive && socket.id === firstAlive.id) {
+            socket.emit('syncTurn', { roomCode: currentRoom, turnIndex: currentTurnIndex });
+        }
+    }
 }
 
 function calculateBoxes(lineId, playerIndex) {
@@ -254,16 +283,19 @@ function updateUI() {
 }
 
 function checkWinCondition() {
-    if (scores.reduce((a, b) => a + b, 0) === boxesCount * boxesCount) {
+    const aliveCount = roomPlayers.filter(p => !p.isDead).length;
+    if (scores.reduce((a, b) => a + b, 0) === boxesCount * boxesCount && aliveCount > 1) {
         socket.emit('gameOver', currentRoom); 
         setTimeout(() => {
-            const maxScore = Math.max(...scores); const winners = roomPlayers.filter((p, i) => scores[i] === maxScore);
+            const maxScore = Math.max(...scores); const winners = roomPlayers.filter((p, i) => scores[i] === maxScore && !p.isDead);
             const winnerText = document.getElementById('winner-text');
             if (winners.length === 1) { winnerText.innerText = `${winners[0].name} Wins!`; winnerText.style.color = winners[0].color; } 
             else { winnerText.innerText = "It's a Tie!"; winnerText.style.color = "var(--ink-dark)"; }
             
             const list = document.getElementById('final-scores-list'); list.innerHTML = '';
-            roomPlayers.forEach((p, i) => list.innerHTML += `<div style="color: ${p.color}">${p.name}: ${scores[i]}</div>`);
+            roomPlayers.forEach((p, i) => {
+                if(!p.isDead) list.innerHTML += `<div style="color: ${p.color}">${p.name}: ${scores[i]}</div>`;
+            });
             
             document.getElementById('game-over-modal').classList.remove('hidden');
             localStorage.removeItem('dotsGame'); 
