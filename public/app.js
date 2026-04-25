@@ -1,7 +1,7 @@
 const socket = io();
 
 const screens = { landing: document.getElementById('landing-screen'), lobby: document.getElementById('lobby-screen'), game: document.getElementById('game-screen') };
-const timerText = document.getElementById('time-left');
+const timerText = document.getElementById('timer-display');
 const turnDisplay = document.getElementById('turn-display');
 const paletteColors = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#ec4899'];
 
@@ -12,7 +12,7 @@ let currentTurnIndex = 0; let dotsCount = 10; let boxesCount = 9;
 // --- AUDIO ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playSound(type) {
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (audioCtx.state === 'suspended') return;
     const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
     osc.connect(gain); gain.connect(audioCtx.destination);
     if (type === 'draw') {
@@ -26,7 +26,6 @@ function playSound(type) {
     }
 }
 
-// --- INIT & LOCAL STORAGE ---
 function renderPalette(containerId, inputId, defaultColor) {
     const container = document.getElementById(containerId); const input = document.getElementById(inputId); input.value = defaultColor;
     paletteColors.forEach(color => {
@@ -87,10 +86,7 @@ socket.on('lobbyUpdated', (data) => {
 
 socket.on('gameStarted', (data) => {
     roomPlayers = data.players; dotsCount = data.boardSize; boxesCount = dotsCount - 1;
-    roomPlayers.forEach((p, index) => {
-        document.documentElement.style.setProperty(`--p${index}-color`, p.color);
-        if (p.id === socket.id) myPlayerIndex = index;
-    });
+    roomPlayers.forEach((p, index) => { document.documentElement.style.setProperty(`--p${index}-color`, p.color); if (p.id === socket.id) myPlayerIndex = index; });
     switchScreen(screens.game); resetLocalGame();
 });
 
@@ -117,38 +113,36 @@ socket.on('spectatorJoined', (data) => {
 });
 
 socket.on('receiveMove', (lineId) => { processMove(lineId, false); });
-
-socket.on('timerUpdate', (timeLeft) => {
-    timerText.innerText = `${timeLeft}s`;
-    timerText.style.color = timeLeft <= 5 ? '#ef4444' : 'var(--ink-dark)';
-});
-
+socket.on('timerUpdate', (timeLeft) => { timerText.innerText = `${timeLeft}s`; timerText.style.color = timeLeft <= 5 ? '#ef4444' : 'var(--ink-dark)'; });
 document.getElementById('rematch-btn').addEventListener('click', () => { if(myPlayerIndex !== -1) socket.emit('requestRematch', currentRoom); });
-socket.on('returnToLobby', () => { switchScreen(screens.lobby); });
 
-function switchScreen(screen) { 
-    Object.values(screens).forEach(s => { s.classList.remove('active'); s.classList.add('hidden'); }); 
-    screen.classList.remove('hidden'); screen.classList.add('active'); 
-}
-
+function switchScreen(screen) { Object.values(screens).forEach(s => { s.classList.remove('active'); s.classList.add('hidden'); }); screen.classList.remove('hidden'); screen.classList.add('active'); }
 function saveSession() { if (currentRoom && mySessionId) localStorage.setItem('dotsGame', JSON.stringify({ roomCode: currentRoom, sessionId: mySessionId })); }
 
+// --- GAME LOGIC ---
 function resetLocalGame() {
     scores = new Array(roomPlayers.length).fill(0); currentTurnIndex = 0; 
     document.getElementById('game-over-modal').classList.add('hidden');
-    buildScoreboard(); initBoard(); updateUI();
-}
-
-function buildScoreboard() {
-    const sb = document.getElementById('dynamic-scoreboard'); sb.innerHTML = '';
-    roomPlayers.forEach((p, i) => sb.innerHTML += `<div class="score-card p-${i}" id="card-p${i}"><span class="name">${p.name}</span><span class="score" id="score-p${i}">0</span></div>`);
+    
+    // Manage Hardcoded Scoreboard Slots
+    for (let i = 0; i < 4; i++) {
+        const card = document.getElementById(`card-p${i}`);
+        if (i < roomPlayers.length) {
+            card.classList.remove('hidden');
+            document.getElementById(`name-p${i}`).innerText = roomPlayers[i].name;
+            document.getElementById(`score-p${i}`).innerText = "0";
+        } else {
+            card.classList.add('hidden');
+        }
+    }
+    initBoard(); updateUI();
 }
 
 function initBoard() {
     const container = document.querySelector('.board-container'); container.innerHTML = ''; 
-    const maxBoardWidth = window.innerWidth > 500 ? 370 : window.innerWidth - 60; 
+    const maxBoardWidth = window.innerWidth > 500 ? 400 : window.innerWidth - 40; 
     const spacing = Math.floor(maxBoardWidth / dotsCount); 
-    const dotSize = 8; const lineThickness = 12; // Thicker click area for mobile
+    const dotSize = 8; const lineThickness = 8; 
     
     container.style.width = `${spacing * dotsCount}px`; container.style.height = `${spacing * dotsCount}px`;
 
@@ -192,7 +186,7 @@ function processMove(lineId, isReplay) {
     line.classList.add(`claimed-p${playerIndex}`); line.dataset.claimed = "true";
     if (!isReplay) playSound('draw');
     
-    let boxesScored = calculateBoxes(lineId, playerIndex, isReplay);
+    let boxesScored = calculateBoxes(lineId, playerIndex);
     if (boxesScored > 0) {
         if (!isReplay) playSound('box'); scores[playerIndex] += boxesScored;
     } else currentTurnIndex = (currentTurnIndex + 1) % roomPlayers.length;
@@ -201,25 +195,24 @@ function processMove(lineId, isReplay) {
     if (!isReplay) checkWinCondition();
 }
 
-function calculateBoxes(lineId, playerIndex, isReplay) {
+function calculateBoxes(lineId, playerIndex) {
     const parts = lineId.split('-'); const type = parts[0]; const r = parseInt(parts[1]); const c = parseInt(parts[2]); let formed = 0;
     if (type === 'h') {
-        if (r > 0 && checkBox(r - 1, c, playerIndex, isReplay)) formed++; 
-        if (r < boxesCount && checkBox(r, c, playerIndex, isReplay)) formed++; 
+        if (r > 0 && checkBox(r - 1, c, playerIndex)) formed++; 
+        if (r < boxesCount && checkBox(r, c, playerIndex)) formed++; 
     } else if (type === 'v') {
-        if (c > 0 && checkBox(r, c - 1, playerIndex, isReplay)) formed++; 
-        if (c < boxesCount && checkBox(r, c, playerIndex, isReplay)) formed++; 
+        if (c > 0 && checkBox(r, c - 1, playerIndex)) formed++; 
+        if (c < boxesCount && checkBox(r, c, playerIndex)) formed++; 
     }
     return formed;
 }
 
-function checkBox(r, c, playerIndex, isReplay) {
+function checkBox(r, c, playerIndex) {
     const top = document.getElementById(`h-${r}-${c}`), bottom = document.getElementById(`h-${r+1}-${c}`), left = document.getElementById(`v-${r}-${c}`), right = document.getElementById(`v-${r}-${c+1}`);
     if (top?.dataset.claimed && bottom?.dataset.claimed && left?.dataset.claimed && right?.dataset.claimed) {
         const box = document.getElementById(`box-${r}-${c}`);
         if (!box.dataset.claimed) { 
             box.dataset.claimed = "true"; box.classList.add(`claimed-p${playerIndex}`); 
-            if (isReplay) { box.style.animation = 'none'; box.style.opacity = 0.3; box.style.transform = 'scale(1)'; }
             return true; 
         }
     }

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dots & Boxes | Auto-Save</title>
+    <title>Dots & Boxes</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,13 +13,11 @@
             <div class="card">
                 <h3>Your Details</h3>
                 <input type="text" id="player-name" placeholder="Enter Your Name" value="Player">
-                
                 <div class="palette-container">
                     <label>Choose Ink Color:</label>
                     <div id="player-palette" class="palette"></div>
                     <input type="hidden" id="player-color" value="#3b82f6">
                 </div>
-                
                 <div class="size-selector">
                     <label>Grid Size (Host Only):</label>
                     <select id="board-size">
@@ -28,9 +26,7 @@
                         <option value="15">Epic (14x14 Boxes)</option>
                     </select>
                 </div>
-                
                 <div class="action-divider"><span>PLAY</span></div>
-                
                 <div class="action-buttons">
                     <button id="host-btn" class="primary-btn w-full">Create New Room</button>
                     <div class="join-section">
@@ -53,27 +49,47 @@
         </div>
 
         <div id="game-screen" class="panel hidden">
-            <div class="game-core">
-                <div class="timer-display" id="timer-display">
-                    <span id="turn-display">Waiting...</span>
-                    <div class="time-left" id="time-left">15s</div>
+            
+            <div class="scoreboard">
+                <div class="side-scores left-scores">
+                    <div class="score-card p-0" id="card-p0">
+                        <span id="name-p0" class="name">P1</span>
+                        <span id="score-p0" class="score">0</span>
+                    </div>
+                    <div class="score-card p-2 hidden" id="card-p2">
+                        <span id="name-p2" class="name">P3</span>
+                        <span id="score-p2" class="score">0</span>
+                    </div>
                 </div>
 
-                <div class="scoreboard" id="dynamic-scoreboard"></div>
-                
-                <div class="board-wrapper">
-                    <div class="board-container"></div>
-                    <div id="game-over-modal" class="modal hidden">
-                        <h2 id="winner-text">Player Wins!</h2>
-                        <div id="final-scores-list" class="final-scores"></div>
-                        <button id="rematch-btn" class="primary-btn">Back to Lobby</button>
-                        <button id="leave-btn" class="secondary-btn" style="margin-top:10px;">Leave Room</button>
+                <div class="turn-indicator">
+                    <span id="turn-display">Waiting...</span>
+                    <div id="timer-display" style="color: #ef4444; font-size: 1.5rem; margin-top: 5px;">15s</div>
+                </div>
+
+                <div class="side-scores right-scores">
+                    <div class="score-card p-1" id="card-p1">
+                        <span id="score-p1" class="score">0</span>
+                        <span id="name-p1" class="name">P2</span>
                     </div>
+                    <div class="score-card p-3 hidden" id="card-p3">
+                        <span id="score-p3" class="score">0</span>
+                        <span id="name-p3" class="name">P4</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="board-wrapper">
+                <div class="board-container"></div>
+                <div id="game-over-modal" class="modal hidden">
+                    <h2 id="winner-text">Player Wins!</h2>
+                    <div id="final-scores-list" class="final-scores"></div>
+                    <button id="rematch-btn" class="primary-btn w-full" style="margin-bottom:10px;">Play Again</button>
+                    <button id="leave-btn" class="secondary-btn w-full">Leave Room</button>
                 </div>
             </div>
         </div>
     </div>
-
     <script src="/socket.io/socket.io.js"></script>
     <script src="app.js"></script>
 </body>

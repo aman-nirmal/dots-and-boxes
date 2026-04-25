@@ -25,11 +25,9 @@ function startTurnTimer(roomCode) {
 
         if (room.timeLeft <= 0) {
             clearInterval(room.timerInterval);
-            
             if (room.availableLines && room.availableLines.length > 0) {
                 const randomIndex = Math.floor(Math.random() * room.availableLines.length);
                 const randomLineId = room.availableLines.splice(randomIndex, 1)[0];
-                
                 room.moveHistory.push(randomLineId);
                 io.to(roomCode).emit('receiveMove', randomLineId);
                 startTurnTimer(roomCode); 
@@ -46,7 +44,6 @@ io.on('connection', (socket) => {
     socket.on('createGame', (userData) => {
         const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
         const sessionId = Math.random().toString(36).substring(2, 15);
-        
         rooms[roomCode] = { 
             boardSize: userData.boardSize,
             started: false,
@@ -56,7 +53,6 @@ io.on('connection', (socket) => {
             timeLeft: 15,
             players: [{ id: socket.id, sessionId, name: userData.name, color: userData.color }] 
         };
-        
         socket.join(roomCode);
         socket.emit('gameCreated', { roomCode, sessionId });
         io.to(roomCode).emit('lobbyUpdated', { roomCode, hostId: socket.id, players: rooms[roomCode].players });
@@ -65,27 +61,22 @@ io.on('connection', (socket) => {
     socket.on('joinGame', (userData) => {
         const roomCode = userData.roomCode;
         if (!rooms[roomCode]) return socket.emit('errorMsg', 'Invalid Room Code.');
-        
         const room = rooms[roomCode];
+        
         if (room.started || room.players.length >= 4) {
             socket.join(roomCode);
-            return socket.emit('spectatorJoined', { 
-                roomCode, boardSize: room.boardSize, 
-                players: room.players, moveHistory: room.moveHistory 
-            });
+            return socket.emit('spectatorJoined', { roomCode, boardSize: room.boardSize, players: room.players, moveHistory: room.moveHistory });
         }
 
         let finalColor = userData.color;
         const usedColors = room.players.map(p => p.color);
         if (usedColors.includes(finalColor)) {
-            const safeColors = palette.filter(c => !usedColors.includes(c));
-            finalColor = safeColors.length > 0 ? safeColors[0] : palette[0];
+            finalColor = palette.find(c => !usedColors.includes(c)) || palette[0];
         }
 
         const sessionId = Math.random().toString(36).substring(2, 15);
         room.players.push({ id: socket.id, sessionId, name: userData.name, color: finalColor });
         socket.join(roomCode);
-        
         socket.emit('joinSuccess', { sessionId });
         io.to(roomCode).emit('lobbyUpdated', { roomCode, hostId: room.players[0].id, players: room.players });
     });
@@ -97,11 +88,7 @@ io.on('connection', (socket) => {
             if (playerIndex !== -1) {
                 room.players[playerIndex].id = socket.id;
                 socket.join(data.roomCode);
-                socket.emit('rejoinSuccess', {
-                    roomCode: data.roomCode, boardSize: room.boardSize,
-                    players: room.players, myPlayerIndex: playerIndex,
-                    moveHistory: room.moveHistory, gameStarted: room.started
-                });
+                socket.emit('rejoinSuccess', { roomCode: data.roomCode, boardSize: room.boardSize, players: room.players, myPlayerIndex: playerIndex, moveHistory: room.moveHistory, gameStarted: room.started });
                 return;
             }
         }
@@ -114,14 +101,12 @@ io.on('connection', (socket) => {
             room.started = true;
             room.moveHistory = [];
             room.availableLines = [];
-            
             for (let r = 0; r < room.boardSize; r++) {
                 for (let c = 0; c < room.boardSize; c++) {
                     if (c < room.boardSize - 1) room.availableLines.push(`h-${r}-${c}`);
                     if (r < room.boardSize - 1) room.availableLines.push(`v-${r}-${c}`);
                 }
             }
-
             io.to(roomCode).emit('gameStarted', room);
             startTurnTimer(roomCode);
         }
@@ -152,4 +137,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
