@@ -32,12 +32,13 @@ button { padding: 12px 20px; border: 3px solid var(--ink-dark); font-weight: bol
 
 .action-divider { margin: 20px 0 10px 0; border-bottom: 2px dashed var(--ink-dark); position: relative; }
 .action-divider span { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--paper-bg); padding: 0 15px; font-weight: bold; font-size: 1.2rem; }
+
 .action-buttons { display: flex; flex-direction: column; gap: 15px; }
 
-/* FIX FOR THE SQUISHED JOIN ROOM SECTION */
-.join-section { display: flex; gap: 10px; }
-.join-section input { flex: 1; }
-.join-section button { white-space: nowrap; }
+/* FIXED COLLAPSED INPUT BOX */
+.join-section { display: flex; gap: 10px; width: 100%; }
+#room-input { flex: 1 1 auto; min-width: 120px; } 
+.join-section button { flex: 0 0 auto; white-space: nowrap; }
 
 .w-full { width: 100%; }
 .code-display { font-size: 2.5rem; font-weight: bold; letter-spacing: 10px; border: 2px dashed var(--ink-dark); padding: 10px; margin-top: 10px; display: inline-block; }
@@ -48,7 +49,7 @@ button { padding: 12px 20px; border: 3px solid var(--ink-dark); font-weight: bol
 .player-list li span { width: 15px; height: 15px; border-radius: 50%; display: inline-block; border: 1px solid var(--ink-dark); }
 .waiting-text { font-style: italic; color: #666; margin-bottom: 10px; }
 
-/* EXACT ORIGINAL SCOREBOARD */
+/* Scoreboard */
 .scoreboard { display: flex; justify-content: space-between; align-items: center; background: var(--paper-bg); padding: 10px 20px; border: 3px solid var(--ink-dark); box-shadow: 4px 4px 0px var(--ink-dark); margin-bottom: 30px; font-weight: bold; width: 100%; max-width: 450px; margin: 0 auto 30px; }
 .side-scores { display: flex; flex-direction: column; gap: 10px; }
 .score-card { display: flex; flex-direction: column; align-items: center; opacity: 0.4; transition: 0.2s; }
@@ -58,7 +59,7 @@ button { padding: 12px 20px; border: 3px solid var(--ink-dark); font-weight: bol
 .turn-indicator { padding: 5px; border-bottom: 2px solid var(--ink-dark); padding-bottom: 10px; display: flex; flex-direction: column; align-items: center; }
 .hidden { display: none !important; }
 
-/* Board */
+/* Original Board Styles (Restored exactly to your original UI) */
 .board-wrapper { position: relative; display: flex; justify-content: center; }
 .board-container { position: relative; margin: 0 auto; background: transparent; padding: 10px; touch-action: none; }
 .dot { position: absolute; width: 8px; height: 8px; background: var(--ink-dark); border-radius: 50%; z-index: 3; }
@@ -70,11 +71,11 @@ button { padding: 12px 20px; border: 3px solid var(--ink-dark); font-weight: bol
 .line.claimed-p2 { background: var(--p2-color) !important; pointer-events: none; }
 .line.claimed-p3 { background: var(--p3-color) !important; pointer-events: none; }
 
-.box { position: absolute; z-index: 1; transition: background 0.2s ease; border-radius: 0px; opacity: 0.3; }
-.box.claimed-p0 { background: var(--p0-color); }
-.box.claimed-p1 { background: var(--p1-color); }
-.box.claimed-p2 { background: var(--p2-color); }
-.box.claimed-p3 { background: var(--p3-color); }
+.box { position: absolute; z-index: 1; border-radius: 0px; }
+.box.claimed-p0 { background: var(--p0-color); opacity: 0.3; }
+.box.claimed-p1 { background: var(--p1-color); opacity: 0.3; }
+.box.claimed-p2 { background: var(--p2-color); opacity: 0.3; }
+.box.claimed-p3 { background: var(--p3-color); opacity: 0.3; }
 
 .modal { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.95); border: 4px solid var(--ink-dark); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10; gap: 20px; padding: 20px; }
 .final-scores { font-size: 1.5rem; display: flex; flex-direction: column; gap: 10px; font-weight: bold; text-align: center; }
