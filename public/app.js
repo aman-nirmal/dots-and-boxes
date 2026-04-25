@@ -1,229 +1,253 @@
 const socket = io();
 
-// UI Elements
-const landingScreen = document.getElementById('landing-screen');
-const lobbyScreen = document.getElementById('lobby-screen');
-const gameScreen = document.getElementById('game-screen');
-const gameOverModal = document.getElementById('game-over-modal');
-
+const screens = { landing: document.getElementById('landing-screen'), lobby: document.getElementById('lobby-screen'), game: document.getElementById('game-screen') };
+const chatElements = { messages: document.getElementById('chat-messages'), input: document.getElementById('chat-input'), sendBtn: document.getElementById('chat-send') };
+const timerText = document.getElementById('time-left');
 const turnDisplay = document.getElementById('turn-display');
-const p1ScoreEl = document.getElementById('p1-score');
-const p2ScoreEl = document.getElementById('p2-score');
-const p1NameEl = document.getElementById('p1-name-display');
-const p2NameEl = document.getElementById('p2-name-display');
-
-// Colors Palette
 const paletteColors = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#ec4899'];
 
-let currentRoom = '';
-let myPlayerId = 1; 
-let currentTurn = 1; 
-let p1Score = 0; let p2Score = 0;
-let p1Name = 'Player 1'; let p2Name = 'Player 2';
+let currentRoom = ''; let mySessionId = ''; let roomPlayers = []; let scores = [];
+let myPlayerIndex = -1; let myName = ''; let myColor = '#000';
+let currentTurnIndex = 0; let dotsCount = 10; let boxesCount = 9; 
 
-const dotsCount = 10; 
-const boxesCount = dotsCount - 1; 
-const totalBoxesToWin = boxesCount * boxesCount;
+// --- AUDIO ---
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSound(type) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    if (type === 'draw') {
+        osc.type = 'triangle'; osc.frequency.setValueAtTime(400, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+    } else if (type === 'box') {
+        osc.type = 'square'; osc.frequency.setValueAtTime(600, audioCtx.currentTime); osc.frequency.setValueAtTime(900, audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+    }
+}
 
-// --- INITIALIZE UI ---
+// --- INIT & LOCAL STORAGE ---
 function renderPalette(containerId, inputId, defaultColor) {
-    const container = document.getElementById(containerId);
-    const input = document.getElementById(inputId);
-    input.value = defaultColor;
-
+    const container = document.getElementById(containerId); const input = document.getElementById(inputId); input.value = defaultColor;
     paletteColors.forEach(color => {
-        const swatch = document.createElement('div');
-        swatch.className = 'swatch';
-        swatch.style.backgroundColor = color;
+        const swatch = document.createElement('div'); swatch.className = 'swatch'; swatch.style.backgroundColor = color;
         if(color === defaultColor) swatch.classList.add('selected');
-        
-        swatch.onclick = () => {
-            container.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
-            swatch.classList.add('selected');
-            input.value = color;
-        };
+        swatch.onclick = () => { container.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected')); swatch.classList.add('selected'); input.value = color; };
         container.appendChild(swatch);
     });
 }
-
 renderPalette('player-palette', 'player-color', '#3b82f6'); 
 
-// --- NETWORK LOGIC ---
+window.onload = () => {
+    const savedData = JSON.parse(localStorage.getItem('dotsGame'));
+    if (savedData && savedData.roomCode && savedData.sessionId) {
+        socket.emit('rejoinGame', { roomCode: savedData.roomCode, sessionId: savedData.sessionId });
+    }
+};
+
+// --- NETWORK EVENTS ---
 document.getElementById('host-btn').addEventListener('click', () => { 
-    const name = document.getElementById('player-name').value || 'P1';
-    const color = document.getElementById('player-color').value;
-    socket.emit('createGame', { name, color }); 
+    myName = document.getElementById('player-name').value || 'P1'; myColor = document.getElementById('player-color').value;
+    const boardSize = parseInt(document.getElementById('board-size').value);
+    socket.emit('createGame', { name: myName, color: myColor, boardSize }); 
 });
 
 document.getElementById('join-btn').addEventListener('click', () => {
     const code = document.getElementById('room-input').value.toUpperCase();
-    const name = document.getElementById('player-name').value || 'P2';
-    const color = document.getElementById('player-color').value;
-    
-    if (code.length > 0) socket.emit('joinGame', { roomCode: code, name, color });
+    myName = document.getElementById('player-name').value || 'Player'; myColor = document.getElementById('player-color').value;
+    if (code.length > 0) socket.emit('joinGame', { roomCode: code, name: myName, color: myColor });
 });
 
-socket.on('gameCreated', (roomCode) => {
-    myPlayerId = 1; 
-    currentRoom = roomCode;
-    document.getElementById('room-code-display').innerText = roomCode;
-    switchScreen(lobbyScreen);
+document.getElementById('start-game-btn').addEventListener('click', () => socket.emit('startGame', currentRoom));
+document.getElementById('leave-btn').addEventListener('click', () => { localStorage.removeItem('dotsGame'); location.reload(); });
+
+socket.on('errorMsg', (msg) => { document.getElementById('error-msg').innerText = msg; localStorage.removeItem('dotsGame'); });
+
+socket.on('gameCreated', (data) => { mySessionId = data.sessionId; currentRoom = data.roomCode; saveSession(); });
+socket.on('joinSuccess', (data) => { mySessionId = data.sessionId; });
+
+socket.on('lobbyUpdated', (data) => {
+    currentRoom = data.roomCode; roomPlayers = data.players;
+    document.getElementById('room-code-display').innerText = currentRoom;
+    document.getElementById('player-count').innerText = roomPlayers.length;
+    
+    const list = document.getElementById('lobby-player-list'); list.innerHTML = '';
+    roomPlayers.forEach(p => list.innerHTML += `<li><span style="background-color: ${p.color}"></span> ${p.name}</li>`);
+
+    if (socket.id === data.hostId && roomPlayers.length >= 2) {
+        document.getElementById('start-game-btn').classList.remove('hidden');
+        document.getElementById('waiting-msg').classList.add('hidden');
+    }
+    switchScreen(screens.lobby); saveSession();
 });
 
 socket.on('gameStarted', (data) => {
-    if (!currentRoom) myPlayerId = 2; 
-    currentRoom = data.roomCode;
-    
-    p1Name = data.p1Name; p2Name = data.p2Name;
-    p1NameEl.innerText = p1Name; p2NameEl.innerText = p2Name;
-    
-    document.documentElement.style.setProperty('--p1-color', data.p1Color);
-    document.documentElement.style.setProperty('--p2-color', data.p2Color);
-    
-    switchScreen(gameScreen);
-    resetLocalGame();
+    roomPlayers = data.players; dotsCount = data.boardSize; boxesCount = dotsCount - 1;
+    roomPlayers.forEach((p, index) => {
+        document.documentElement.style.setProperty(`--p${index}-color`, p.color);
+        if (p.id === socket.id) myPlayerIndex = index;
+    });
+    switchScreen(screens.game); resetLocalGame();
 });
 
-socket.on('receiveMove', (moveData) => { processMove(moveData.lineId, moveData.player); });
+// --- RECONNECT HANDLING ---
+socket.on('rejoinSuccess', (data) => {
+    currentRoom = data.roomCode; roomPlayers = data.players; dotsCount = data.boardSize; boxesCount = dotsCount - 1;
+    myPlayerIndex = data.myPlayerIndex; myName = roomPlayers[myPlayerIndex].name; myColor = roomPlayers[myPlayerIndex].color;
+    roomPlayers.forEach((p, index) => document.documentElement.style.setProperty(`--p${index}-color`, p.color));
+    
+    if (data.gameStarted) {
+        switchScreen(screens.game); resetLocalGame();
+        data.moveHistory.forEach(move => {
+            if (move.type === 'timeout') currentTurnIndex = (currentTurnIndex + 1) % roomPlayers.length;
+            else processMove(move.lineId, move.playerIndex, true);
+        });
+        updateUI();
+    } else {
+        socket.emit('joinGame', { roomCode: currentRoom, name: myName, color: myColor });
+    }
+});
 
-document.getElementById('rematch-btn').addEventListener('click', () => { socket.emit('requestRematch', currentRoom); });
-socket.on('resetBoard', () => { resetLocalGame(); });
+socket.on('spectatorJoined', (data) => {
+    currentRoom = data.roomCode; roomPlayers = data.players; dotsCount = data.boardSize; boxesCount = dotsCount - 1;
+    myPlayerIndex = -1; myName = "Spectator"; myColor = "#999";
+    roomPlayers.forEach((p, index) => document.documentElement.style.setProperty(`--p${index}-color`, p.color));
+    switchScreen(screens.game); resetLocalGame(); 
+    if(data.moveHistory) data.moveHistory.forEach(move => {
+        if (move.type === 'timeout') currentTurnIndex = (currentTurnIndex + 1) % roomPlayers.length;
+        else processMove(move.lineId, move.playerIndex, true);
+    });
+    addChatMessage("System", "You joined as a Spectator.", "#000");
+});
 
-function switchScreen(screen) {
-    document.querySelectorAll('.panel').forEach(p => { p.classList.remove('active'); p.classList.add('hidden'); });
-    screen.classList.remove('hidden'); screen.classList.add('active');
-}
+// --- GAME & TIMER EVENTS ---
+socket.on('receiveMove', (moveData) => { processMove(moveData.lineId, moveData.playerIndex, false); });
+
+socket.on('timerUpdate', (timeLeft) => {
+    timerText.innerText = `${timeLeft}s`;
+    timerText.style.color = timeLeft <= 5 ? 'red' : 'var(--ink-dark)';
+});
+
+socket.on('turnTimeout', () => {
+    currentTurnIndex = (currentTurnIndex + 1) % roomPlayers.length;
+    updateUI();
+});
+
+document.getElementById('rematch-btn').addEventListener('click', () => { if(myPlayerIndex !== -1) socket.emit('requestRematch', currentRoom); });
+socket.on('returnToLobby', () => { switchScreen(screens.lobby); });
+
+function switchScreen(screen) { Object.values(screens).forEach(s => { s.classList.remove('active'); s.classList.add('hidden'); }); screen.classList.remove('hidden'); screen.classList.add('active'); }
+function saveSession() { if (currentRoom && mySessionId) localStorage.setItem('dotsGame', JSON.stringify({ roomCode: currentRoom, sessionId: mySessionId })); }
+
+// --- CHAT LOGIC ---
+chatElements.sendBtn.addEventListener('click', sendChat); chatElements.input.addEventListener('keypress', (e) => { if(e.key === 'Enter') sendChat(); });
+function sendChat() { const msg = chatElements.input.value.trim(); if(msg && currentRoom) { socket.emit('sendChat', { roomCode: currentRoom, sender: myName, message: msg, color: myColor }); chatElements.input.value = ''; } }
+socket.on('receiveChat', (data) => addChatMessage(data.sender, data.message, data.color));
+function addChatMessage(sender, msg, color) { chatElements.messages.innerHTML += `<div class="chat-msg"><span style="color:${color}">${sender}</span> <p>${msg}</p></div>`; chatElements.messages.scrollTop = chatElements.messages.scrollHeight; }
 
 // --- GAME LOGIC ---
-
 function resetLocalGame() {
-    p1Score = 0; p2Score = 0; currentTurn = 1;
-    gameOverModal.classList.add('hidden');
-    initBoard(); updateUI();
+    scores = new Array(roomPlayers.length).fill(0); currentTurnIndex = 0; 
+    document.getElementById('game-over-modal').classList.add('hidden');
+    buildScoreboard(); initBoard(); updateUI();
+}
+
+function buildScoreboard() {
+    const sb = document.getElementById('dynamic-scoreboard'); sb.innerHTML = '';
+    roomPlayers.forEach((p, i) => sb.innerHTML += `<div class="score-card p-${i}" id="card-p${i}"><span class="name">${p.name}</span><span class="score" id="score-p${i}">0</span></div>`);
 }
 
 function initBoard() {
-    const container = document.querySelector('.board-container');
-    container.innerHTML = ''; 
-    const spacing = 40;   
-    const dotSize = 8; 
-    const lineThickness = 6; 
+    const container = document.querySelector('.board-container'); container.innerHTML = ''; 
+    const maxBoardWidth = window.innerWidth > 600 ? 400 : window.innerWidth - 40; 
+    const spacing = Math.floor(maxBoardWidth / dotsCount); const dotSize = 8; const lineThickness = 6; 
+    container.style.width = `${spacing * dotsCount}px`; container.style.height = `${spacing * dotsCount}px`;
 
     for (let r = 0; r < dotsCount; r++) {
         for (let c = 0; c < dotsCount; c++) {
-            const dot = document.createElement('div');
-            dot.className = 'dot';
-            dot.style.left = `${c * spacing}px`; dot.style.top = `${r * spacing}px`;
-            container.appendChild(dot);
-
+            const dot = document.createElement('div'); dot.className = 'dot'; dot.style.left = `${c * spacing}px`; dot.style.top = `${r * spacing}px`; container.appendChild(dot);
             if (c < dotsCount - 1) {
-                const hLine = document.createElement('div');
-                hLine.className = 'line h-line'; hLine.id = `h-${r}-${c}`;
-                hLine.style.left = `${c * spacing + dotSize}px`; hLine.style.top = `${r * spacing + (dotSize - lineThickness)/2}px`;
-                hLine.style.width = `${spacing - dotSize}px`; hLine.style.height = `${lineThickness}px`;
-                setupLineClick(hLine); container.appendChild(hLine);
+                const hLine = document.createElement('div'); hLine.className = 'line h-line'; hLine.id = `h-${r}-${c}`; hLine.style.left = `${c * spacing + dotSize}px`; hLine.style.top = `${r * spacing + (dotSize - lineThickness)/2}px`; hLine.style.width = `${spacing - dotSize}px`; hLine.style.height = `${lineThickness}px`; setupLineClick(hLine); container.appendChild(hLine);
             }
-
             if (r < dotsCount - 1) {
-                const vLine = document.createElement('div');
-                vLine.className = 'line v-line'; vLine.id = `v-${r}-${c}`;
-                vLine.style.left = `${c * spacing + (dotSize - lineThickness)/2}px`; vLine.style.top = `${r * spacing + dotSize}px`;
-                vLine.style.width = `${lineThickness}px`; vLine.style.height = `${spacing - dotSize}px`;
-                setupLineClick(vLine); container.appendChild(vLine);
+                const vLine = document.createElement('div'); vLine.className = 'line v-line'; vLine.id = `v-${r}-${c}`; vLine.style.left = `${c * spacing + (dotSize - lineThickness)/2}px`; vLine.style.top = `${r * spacing + dotSize}px`; vLine.style.width = `${lineThickness}px`; vLine.style.height = `${spacing - dotSize}px`; setupLineClick(vLine); container.appendChild(vLine);
             }
-            
             if (r < dotsCount - 1 && c < dotsCount - 1) {
-                const box = document.createElement('div');
-                box.className = 'box'; box.id = `box-${r}-${c}`;
-                box.style.left = `${c * spacing + dotSize}px`; box.style.top = `${r * spacing + dotSize}px`;
-                box.style.width = `${spacing - dotSize}px`; box.style.height = `${spacing - dotSize}px`;
-                container.appendChild(box);
+                const box = document.createElement('div'); box.className = 'box'; box.id = `box-${r}-${c}`; box.style.left = `${c * spacing + dotSize}px`; box.style.top = `${r * spacing + dotSize}px`; box.style.width = `${spacing - dotSize}px`; box.style.height = `${spacing - dotSize}px`; container.appendChild(box);
             }
         }
     }
 }
 
-function setupLineClick(lineElement) {
-    lineElement.addEventListener('click', () => {
-        if (currentTurn !== myPlayerId) return;
-        if (lineElement.dataset.claimed === "true") return;
-
-        socket.emit('makeMove', { roomCode: currentRoom, moveData: { lineId: lineElement.id, player: myPlayerId } });
+function setupLineClick(line) {
+    line.addEventListener('click', () => {
+        if (myPlayerIndex === -1 || currentTurnIndex !== myPlayerIndex || line.dataset.claimed === "true") return;
+        socket.emit('makeMove', { roomCode: currentRoom, moveData: { lineId: line.id, playerIndex: myPlayerIndex }});
     });
 }
 
-function processMove(lineId, player) {
-    const line = document.getElementById(lineId);
-    line.classList.add(`claimed-p${player}`);
-    line.dataset.claimed = "true";
-
-    let boxesScored = calculateBoxes(lineId, player);
-
-    if (boxesScored > 0) {
-        if (player === 1) p1Score += boxesScored;
-        if (player === 2) p2Score += boxesScored;
-    } else {
-        currentTurn = currentTurn === 1 ? 2 : 1;
-    }
+function processMove(lineId, playerIndex, isReplay) {
+    const line = document.getElementById(lineId); line.classList.add(`claimed-p${playerIndex}`); line.dataset.claimed = "true";
+    if (!isReplay) playSound('draw');
     
-    updateUI(); checkWinCondition();
+    let boxesScored = calculateBoxes(lineId, playerIndex, isReplay);
+    if (boxesScored > 0) {
+        if (!isReplay) playSound('box'); scores[playerIndex] += boxesScored;
+    } else currentTurnIndex = (currentTurnIndex + 1) % roomPlayers.length;
+    
+    updateUI(); 
+    if (!isReplay) checkWinCondition();
 }
 
-function calculateBoxes(lineId, player) {
-    const parts = lineId.split('-'); const type = parts[0]; const r = parseInt(parts[1]); const c = parseInt(parts[2]);
-    let formed = 0;
+function calculateBoxes(lineId, playerIndex, isReplay) {
+    const parts = lineId.split('-'); const type = parts[0]; const r = parseInt(parts[1]); const c = parseInt(parts[2]); let formed = 0;
     if (type === 'h') {
-        if (r > 0 && checkBox(r - 1, c, player)) formed++; 
-        if (r < boxesCount && checkBox(r, c, player)) formed++; 
+        if (r > 0 && checkBox(r - 1, c, playerIndex, isReplay)) formed++; 
+        if (r < boxesCount && checkBox(r, c, playerIndex, isReplay)) formed++; 
     } else if (type === 'v') {
-        if (c > 0 && checkBox(r, c - 1, player)) formed++; 
-        if (c < boxesCount && checkBox(r, c, player)) formed++; 
+        if (c > 0 && checkBox(r, c - 1, playerIndex, isReplay)) formed++; 
+        if (c < boxesCount && checkBox(r, c, playerIndex, isReplay)) formed++; 
     }
     return formed;
 }
 
-function checkBox(r, c, player) {
-    const top = document.getElementById(`h-${r}-${c}`);
-    const bottom = document.getElementById(`h-${r+1}-${c}`);
-    const left = document.getElementById(`v-${r}-${c}`);
-    const right = document.getElementById(`v-${r}-${c+1}`);
-
+function checkBox(r, c, playerIndex, isReplay) {
+    const top = document.getElementById(`h-${r}-${c}`), bottom = document.getElementById(`h-${r+1}-${c}`), left = document.getElementById(`v-${r}-${c}`), right = document.getElementById(`v-${r}-${c+1}`);
     if (top?.dataset.claimed && bottom?.dataset.claimed && left?.dataset.claimed && right?.dataset.claimed) {
         const box = document.getElementById(`box-${r}-${c}`);
-        if (!box.dataset.claimed) {
-            box.dataset.claimed = "true"; box.classList.add(`claimed-p${player}`); return true;
+        if (!box.dataset.claimed) { 
+            box.dataset.claimed = "true"; box.classList.add(`claimed-p${playerIndex}`); 
+            if (isReplay) { box.style.animation = 'none'; box.style.opacity = 0.3; box.style.transform = 'scale(1)'; }
+            return true; 
         }
     }
     return false;
 }
 
 function updateUI() {
-    p1ScoreEl.innerText = p1Score; p2ScoreEl.innerText = p2Score;
-    if (currentTurn === myPlayerId) {
-        turnDisplay.innerText = "YOUR TURN"; turnDisplay.style.textDecoration = "underline";
-    } else {
-        const oppName = myPlayerId === 1 ? p2Name : p1Name;
-        turnDisplay.innerText = `${oppName}'S TURN`; turnDisplay.style.textDecoration = "none";
-    }
+    roomPlayers.forEach((p, i) => {
+        document.getElementById(`score-p${i}`).innerText = scores[i];
+        document.getElementById(`card-p${i}`).classList.remove('active-turn');
+    });
+    document.getElementById(`card-p${currentTurnIndex}`).classList.add('active-turn');
+    turnDisplay.innerText = (myPlayerIndex !== -1 && currentTurnIndex === myPlayerIndex) ? "YOUR TURN" : `${roomPlayers[currentTurnIndex].name}'S TURN`;
 }
 
 function checkWinCondition() {
-    if (p1Score + p2Score === totalBoxesToWin) {
+    if (scores.reduce((a, b) => a + b, 0) === boxesCount * boxesCount) {
+        socket.emit('gameOver', currentRoom); // Tells server to stop the timer
         setTimeout(() => {
+            const maxScore = Math.max(...scores); const winners = roomPlayers.filter((p, i) => scores[i] === maxScore);
             const winnerText = document.getElementById('winner-text');
-            const finalP1 = document.getElementById('final-p1');
-            const finalP2 = document.getElementById('final-p2');
-
-            if (p1Score > p2Score) {
-                winnerText.innerText = `${p1Name} Wins!`; winnerText.style.color = "var(--p1-color)";
-            } else if (p2Score > p1Score) {
-                winnerText.innerText = `${p2Name} Wins!`; winnerText.style.color = "var(--p2-color)";
-            } else {
-                winnerText.innerText = "It's a Tie!"; winnerText.style.color = "var(--ink-dark)";
-            }
-
-            finalP1.innerText = `${p1Name}: ${p1Score}`; finalP2.innerText = `${p2Name}: ${p2Score}`;
-            gameOverModal.classList.remove('hidden');
+            if (winners.length === 1) { winnerText.innerText = `${winners[0].name} Wins!`; winnerText.style.color = winners[0].color; } 
+            else { winnerText.innerText = "It's a Tie!"; winnerText.style.color = "var(--ink-dark)"; }
+            
+            const list = document.getElementById('final-scores-list'); list.innerHTML = '';
+            roomPlayers.forEach((p, i) => list.innerHTML += `<div style="color: ${p.color}">${p.name}: ${scores[i]}</div>`);
+            
+            document.getElementById('game-over-modal').classList.remove('hidden');
+            localStorage.removeItem('dotsGame'); 
         }, 500); 
     }
 }
