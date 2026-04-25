@@ -11,7 +11,7 @@ app.use(express.static('public'));
 const rooms = {};
 const palette = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#ec4899'];
 
-// --- TIMER LOGIC ---
+// --- AUTO-MOVE TIMER LOGIC ---
 function startTurnTimer(roomCode) {
     const room = rooms[roomCode];
     if (!room || !room.started) return; 
@@ -26,10 +26,16 @@ function startTurnTimer(roomCode) {
 
         if (room.timeLeft <= 0) {
             clearInterval(room.timerInterval);
-            // Save the timeout to history so page refreshes don't break the turn order
-            room.moveHistory.push({ type: 'timeout' }); 
-            io.to(roomCode).emit('turnTimeout');
-            startTurnTimer(roomCode);
+            
+            // Auto-play a random valid move
+            if (room.availableLines && room.availableLines.length > 0) {
+                const randomIndex = Math.floor(Math.random() * room.availableLines.length);
+                const randomLineId = room.availableLines.splice(randomIndex, 1)[0];
+                
+                room.moveHistory.push(randomLineId);
+                io.to(roomCode).emit('receiveMove', randomLineId);
+                startTurnTimer(roomCode); // Restart for next player
+            }
         }
     }, 1000);
 }
@@ -49,6 +55,7 @@ io.on('connection', (socket) => {
             boardSize: userData.boardSize,
             started: false,
             moveHistory: [], 
+            availableLines: [],
             timerInterval: null,
             timeLeft: 15,
             players: [{ id: socket.id, sessionId, name: userData.name, color: userData.color }] 
@@ -93,14 +100,10 @@ io.on('connection', (socket) => {
             if (playerIndex !== -1) {
                 room.players[playerIndex].id = socket.id;
                 socket.join(data.roomCode);
-                
                 socket.emit('rejoinSuccess', {
-                    roomCode: data.roomCode,
-                    boardSize: room.boardSize,
-                    players: room.players,
-                    myPlayerIndex: playerIndex,
-                    moveHistory: room.moveHistory,
-                    gameStarted: room.started
+                    roomCode: data.roomCode, boardSize: room.boardSize,
+                    players: room.players, myPlayerIndex: playerIndex,
+                    moveHistory: room.moveHistory, gameStarted: room.started
                 });
                 return;
             }
@@ -109,26 +112,36 @@ io.on('connection', (socket) => {
     });
 
     socket.on('startGame', (roomCode) => {
-        if (rooms[roomCode]) {
-            rooms[roomCode].started = true;
-            rooms[roomCode].moveHistory = []; // Reset history on new game
-            io.to(roomCode).emit('gameStarted', rooms[roomCode]);
+        const room = rooms[roomCode];
+        if (room) {
+            room.started = true;
+            room.moveHistory = [];
+            room.availableLines = [];
+            
+            // Build the master list of all valid moves for this board size
+            for (let r = 0; r < room.boardSize; r++) {
+                for (let c = 0; c < room.boardSize; c++) {
+                    if (c < room.boardSize - 1) room.availableLines.push(`h-${r}-${c}`);
+                    if (r < room.boardSize - 1) room.availableLines.push(`v-${r}-${c}`);
+                }
+            }
+
+            io.to(roomCode).emit('gameStarted', room);
             startTurnTimer(roomCode);
         }
     });
 
-    socket.on('makeMove', ({ roomCode, moveData }) => {
+    socket.on('makeMove', ({ roomCode, lineId }) => {
         const room = rooms[roomCode];
-        if (room) {
-            room.moveHistory.push(moveData);
-            io.to(roomCode).emit('receiveMove', moveData);
-            startTurnTimer(roomCode); // Restart timer on valid move
+        if (room && room.availableLines.includes(lineId)) {
+            // Remove line from available pool, add to history, and broadcast
+            room.availableLines = room.availableLines.filter(id => id !== lineId);
+            room.moveHistory.push(lineId);
+            io.to(roomCode).emit('receiveMove', lineId);
+            startTurnTimer(roomCode); 
         }
     });
 
-    socket.on('sendChat', (data) => io.to(data.roomCode).emit('receiveChat', data));
-
-    // Kills the timer when someone wins
     socket.on('gameOver', (roomCode) => stopTurnTimer(roomCode));
 
     socket.on('requestRematch', (roomCode) => {

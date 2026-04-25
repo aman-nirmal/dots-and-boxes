@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dots & Boxes | Auto-Save</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dots & Boxes</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -37,7 +37,7 @@
                     </div>
                 </div>
             </div>
-            <p id="error-msg" style="color: red; margin-top: 10px; font-weight: bold;"></p>
+            <p id="error-msg" class="error-text"></p>
         </div>
 
         <div id="lobby-screen" class="panel hidden">
@@ -52,7 +52,6 @@
 
         <div id="game-screen" class="panel hidden game-layout">
             <div class="game-core">
-                
                 <div class="timer-display" id="timer-display">
                     <span id="turn-display">Waiting...</span>
                     <div class="time-left" id="time-left">15s</div>
@@ -68,14 +67,6 @@
                         <button id="rematch-btn" class="primary-btn">Back to Lobby</button>
                         <button id="leave-btn" class="secondary-btn" style="margin-top:10px;">Leave Room</button>
                     </div>
-                </div>
-            </div>
-
-            <div class="chat-container">
-                <div class="chat-messages" id="chat-messages"></div>
-                <div class="chat-input-area">
-                    <input type="text" id="chat-input" placeholder="Type a message...">
-                    <button id="chat-send">Send</button>
                 </div>
             </div>
         </div>

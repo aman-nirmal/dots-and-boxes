@@ -1,7 +1,6 @@
 const socket = io();
 
 const screens = { landing: document.getElementById('landing-screen'), lobby: document.getElementById('lobby-screen'), game: document.getElementById('game-screen') };
-const chatElements = { messages: document.getElementById('chat-messages'), input: document.getElementById('chat-input'), sendBtn: document.getElementById('chat-send') };
 const timerText = document.getElementById('time-left');
 const turnDisplay = document.getElementById('turn-display');
 const paletteColors = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#ec4899'];
@@ -61,7 +60,6 @@ document.getElementById('join-btn').addEventListener('click', () => {
 
 document.getElementById('start-game-btn').addEventListener('click', () => socket.emit('startGame', currentRoom));
 document.getElementById('leave-btn').addEventListener('click', () => { localStorage.removeItem('dotsGame'); location.reload(); });
-
 socket.on('errorMsg', (msg) => { document.getElementById('error-msg').innerText = msg; localStorage.removeItem('dotsGame'); });
 
 socket.on('gameCreated', (data) => { mySessionId = data.sessionId; currentRoom = data.roomCode; saveSession(); });
@@ -99,10 +97,7 @@ socket.on('rejoinSuccess', (data) => {
     
     if (data.gameStarted) {
         switchScreen(screens.game); resetLocalGame();
-        data.moveHistory.forEach(move => {
-            if (move.type === 'timeout') currentTurnIndex = (currentTurnIndex + 1) % roomPlayers.length;
-            else processMove(move.lineId, move.playerIndex, true);
-        });
+        data.moveHistory.forEach(lineId => processMove(lineId, true));
         updateUI();
     } else {
         socket.emit('joinGame', { roomCode: currentRoom, name: myName, color: myColor });
@@ -114,24 +109,15 @@ socket.on('spectatorJoined', (data) => {
     myPlayerIndex = -1; myName = "Spectator"; myColor = "#999";
     roomPlayers.forEach((p, index) => document.documentElement.style.setProperty(`--p${index}-color`, p.color));
     switchScreen(screens.game); resetLocalGame(); 
-    if(data.moveHistory) data.moveHistory.forEach(move => {
-        if (move.type === 'timeout') currentTurnIndex = (currentTurnIndex + 1) % roomPlayers.length;
-        else processMove(move.lineId, move.playerIndex, true);
-    });
-    addChatMessage("System", "You joined as a Spectator.", "#000");
+    if(data.moveHistory) data.moveHistory.forEach(lineId => processMove(lineId, true));
 });
 
 // --- GAME & TIMER EVENTS ---
-socket.on('receiveMove', (moveData) => { processMove(moveData.lineId, moveData.playerIndex, false); });
+socket.on('receiveMove', (lineId) => { processMove(lineId, false); });
 
 socket.on('timerUpdate', (timeLeft) => {
     timerText.innerText = `${timeLeft}s`;
-    timerText.style.color = timeLeft <= 5 ? 'red' : 'var(--ink-dark)';
-});
-
-socket.on('turnTimeout', () => {
-    currentTurnIndex = (currentTurnIndex + 1) % roomPlayers.length;
-    updateUI();
+    timerText.style.color = timeLeft <= 5 ? '#ef4444' : 'var(--ink-dark)';
 });
 
 document.getElementById('rematch-btn').addEventListener('click', () => { if(myPlayerIndex !== -1) socket.emit('requestRematch', currentRoom); });
@@ -139,12 +125,6 @@ socket.on('returnToLobby', () => { switchScreen(screens.lobby); });
 
 function switchScreen(screen) { Object.values(screens).forEach(s => { s.classList.remove('active'); s.classList.add('hidden'); }); screen.classList.remove('hidden'); screen.classList.add('active'); }
 function saveSession() { if (currentRoom && mySessionId) localStorage.setItem('dotsGame', JSON.stringify({ roomCode: currentRoom, sessionId: mySessionId })); }
-
-// --- CHAT LOGIC ---
-chatElements.sendBtn.addEventListener('click', sendChat); chatElements.input.addEventListener('keypress', (e) => { if(e.key === 'Enter') sendChat(); });
-function sendChat() { const msg = chatElements.input.value.trim(); if(msg && currentRoom) { socket.emit('sendChat', { roomCode: currentRoom, sender: myName, message: msg, color: myColor }); chatElements.input.value = ''; } }
-socket.on('receiveChat', (data) => addChatMessage(data.sender, data.message, data.color));
-function addChatMessage(sender, msg, color) { chatElements.messages.innerHTML += `<div class="chat-msg"><span style="color:${color}">${sender}</span> <p>${msg}</p></div>`; chatElements.messages.scrollTop = chatElements.messages.scrollHeight; }
 
 // --- GAME LOGIC ---
 function resetLocalGame() {
@@ -160,8 +140,8 @@ function buildScoreboard() {
 
 function initBoard() {
     const container = document.querySelector('.board-container'); container.innerHTML = ''; 
-    const maxBoardWidth = window.innerWidth > 600 ? 400 : window.innerWidth - 40; 
-    const spacing = Math.floor(maxBoardWidth / dotsCount); const dotSize = 8; const lineThickness = 6; 
+    const maxBoardWidth = window.innerWidth > 500 ? 400 : window.innerWidth - 30; 
+    const spacing = Math.floor(maxBoardWidth / dotsCount); const dotSize = 10; const lineThickness = 12; // Thicker lines for mobile tapping
     container.style.width = `${spacing * dotsCount}px`; container.style.height = `${spacing * dotsCount}px`;
 
     for (let r = 0; r < dotsCount; r++) {
@@ -183,12 +163,16 @@ function initBoard() {
 function setupLineClick(line) {
     line.addEventListener('click', () => {
         if (myPlayerIndex === -1 || currentTurnIndex !== myPlayerIndex || line.dataset.claimed === "true") return;
-        socket.emit('makeMove', { roomCode: currentRoom, moveData: { lineId: line.id, playerIndex: myPlayerIndex }});
+        socket.emit('makeMove', { roomCode: currentRoom, lineId: line.id });
     });
 }
 
-function processMove(lineId, playerIndex, isReplay) {
-    const line = document.getElementById(lineId); line.classList.add(`claimed-p${playerIndex}`); line.dataset.claimed = "true";
+function processMove(lineId, isReplay) {
+    const playerIndex = currentTurnIndex; // Deduced deterministically
+    const line = document.getElementById(lineId); 
+    if(!line) return;
+    
+    line.classList.add(`claimed-p${playerIndex}`); line.dataset.claimed = "true";
     if (!isReplay) playSound('draw');
     
     let boxesScored = calculateBoxes(lineId, playerIndex, isReplay);
