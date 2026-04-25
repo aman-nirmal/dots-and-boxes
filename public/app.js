@@ -144,11 +144,21 @@ socket.on('playerLeft', (data) => {
     }
 });
 
+function fireConfetti() {
+    confetti({
+        particleCount: 150,
+        spread: 100,
+        origin: { y: 0.5 },
+        colors: paletteColors // Uses your game's ink palette!
+    });
+}
+
 socket.on('playerWonByDefault', (winner) => {
     const winnerText = document.getElementById('winner-text');
     winnerText.innerText = `${winner.name} Wins by Default!`;
     winnerText.style.color = winner.color;
     document.getElementById('game-over-modal').classList.remove('hidden');
+    fireConfetti(); // Trigger confetti!
     localStorage.removeItem('dotsGame'); 
 });
 
@@ -321,10 +331,18 @@ function checkWinCondition() {
     if (scores.reduce((a, b) => a + b, 0) === boxesCount * boxesCount && aliveCount > 1) {
         socket.emit('gameOver', currentRoom); 
         setTimeout(() => {
-            const maxScore = Math.max(...scores); const winners = roomPlayers.filter((p, i) => scores[i] === maxScore && !p.isDead);
+            const maxScore = Math.max(...scores); 
+            const winners = roomPlayers.filter((p, i) => scores[i] === maxScore && !p.isDead);
             const winnerText = document.getElementById('winner-text');
-            if (winners.length === 1) { winnerText.innerText = `${winners[0].name} Wins!`; winnerText.style.color = winners[0].color; } 
-            else { winnerText.innerText = "It's a Tie!"; winnerText.style.color = "var(--ink-dark)"; }
+            
+            if (winners.length === 1) { 
+                winnerText.innerText = `${winners[0].name} Wins!`; 
+                winnerText.style.color = winners[0].color; 
+                fireConfetti(); // Trigger confetti for a clear winner!
+            } else { 
+                winnerText.innerText = "It's a Tie!"; 
+                winnerText.style.color = "var(--ink-dark)"; 
+            }
             
             const list = document.getElementById('final-scores-list'); list.innerHTML = '';
             roomPlayers.forEach((p, i) => {
