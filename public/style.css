@@ -6,9 +6,12 @@
 
 body { background-color: var(--paper-bg); background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px); background-size: 20px 20px; color: var(--ink-dark); height: 100vh; display: flex; justify-content: center; align-items: center; overflow-x: hidden; }
 
-.container { width: 100%; max-width: 600px; padding: 15px; }
+.container { width: 100%; max-width: 500px; padding: 15px; }
+
+/* PANEL VISIBILITY (Fixed to prevent UI leaking) */
 .panel { display: none; flex-direction: column; gap: 20px; text-align: center; width: 100%; }
 .panel.active { display: flex; animation: fadeIn 0.3s ease; }
+.hidden { display: none !important; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 h1 { font-size: 2.2rem; font-weight: 800; border-bottom: 4px solid var(--ink-dark); padding-bottom: 10px; display: inline-block; margin: 0 auto 10px; }
@@ -32,7 +35,12 @@ button { padding: 12px 15px; border: 3px solid var(--ink-dark); font-weight: bol
 .action-divider { margin: 20px 0 10px 0; border-bottom: 2px dashed var(--ink-dark); position: relative; }
 .action-divider span { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--paper-bg); padding: 0 15px; font-weight: bold; font-size: 1.2rem; }
 .action-buttons { display: flex; flex-direction: column; gap: 15px; }
-.join-section { display: flex; gap: 10px; }
+
+/* FIX FOR COLLAPSED INPUT BOX */
+.join-section { display: flex; gap: 10px; width: 100%; }
+#room-input { flex: 1 1 auto; min-width: 100px; }
+#join-btn { flex: 0 0 auto; white-space: nowrap; }
+
 .w-full { width: 100%; }
 .code-display { font-size: 2.2rem; font-weight: bold; letter-spacing: 10px; border: 2px dashed var(--ink-dark); padding: 10px; display: inline-block; margin-top: 10px; }
 
@@ -42,7 +50,6 @@ button { padding: 12px 15px; border: 3px solid var(--ink-dark); font-weight: bol
 .waiting-text { font-style: italic; color: #666; margin-bottom: 10px; }
 
 /* Game Layout & Timer */
-.game-layout { display: flex; flex-direction: column; align-items: center; width: 100%; }
 .game-core { width: 100%; display: flex; flex-direction: column; align-items: center; }
 
 .timer-display { display: flex; flex-direction: column; align-items: center; margin-bottom: 15px; font-weight: bold; font-size: 1.2rem; }
@@ -57,7 +64,7 @@ button { padding: 12px 15px; border: 3px solid var(--ink-dark); font-weight: bol
 /* Responsive Board */
 .board-wrapper { position: relative; display: flex; justify-content: center; width: 100%; }
 .board-container { position: relative; background: transparent; padding: 10px; margin: 0 auto; touch-action: manipulation; }
-.dot { position: absolute; width: 10px; height: 10px; background: var(--ink-dark); border-radius: 50%; z-index: 3; }
+.dot { position: absolute; width: 8px; height: 8px; background: var(--ink-dark); border-radius: 50%; z-index: 3; }
 .line { position: absolute; background: transparent; cursor: pointer; z-index: 2; transition: background 0.2s; }
 .line:hover { background: rgba(0,0,0,0.1); }
 
@@ -74,5 +81,4 @@ button { padding: 12px 15px; border: 3px solid var(--ink-dark); font-weight: bol
 @keyframes popIn { 0% { transform: scale(0); opacity: 0; } 70% { transform: scale(1.1); opacity: 0.4; } 100% { transform: scale(1); opacity: 0.3; } }
 
 .modal { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.95); border: 4px solid var(--ink-dark); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10; gap: 15px; padding: 20px; }
-.modal.hidden { display: none; }
 .final-scores { display: flex; flex-direction: column; gap: 10px; font-size: 1.2rem; font-weight: bold; text-align: left; width: 100%; }

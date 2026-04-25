@@ -11,7 +11,6 @@ app.use(express.static('public'));
 const rooms = {};
 const palette = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#ec4899'];
 
-// --- AUTO-MOVE TIMER LOGIC ---
 function startTurnTimer(roomCode) {
     const room = rooms[roomCode];
     if (!room || !room.started) return; 
@@ -27,14 +26,13 @@ function startTurnTimer(roomCode) {
         if (room.timeLeft <= 0) {
             clearInterval(room.timerInterval);
             
-            // Auto-play a random valid move
             if (room.availableLines && room.availableLines.length > 0) {
                 const randomIndex = Math.floor(Math.random() * room.availableLines.length);
                 const randomLineId = room.availableLines.splice(randomIndex, 1)[0];
                 
                 room.moveHistory.push(randomLineId);
                 io.to(roomCode).emit('receiveMove', randomLineId);
-                startTurnTimer(roomCode); // Restart for next player
+                startTurnTimer(roomCode); 
             }
         }
     }, 1000);
@@ -44,9 +42,7 @@ function stopTurnTimer(roomCode) {
     if (rooms[roomCode]) clearInterval(rooms[roomCode].timerInterval);
 }
 
-// --- SOCKET EVENTS ---
 io.on('connection', (socket) => {
-
     socket.on('createGame', (userData) => {
         const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
         const sessionId = Math.random().toString(36).substring(2, 15);
@@ -71,19 +67,20 @@ io.on('connection', (socket) => {
         if (!rooms[roomCode]) return socket.emit('errorMsg', 'Invalid Room Code.');
         
         const room = rooms[roomCode];
-        
         if (room.started || room.players.length >= 4) {
             socket.join(roomCode);
-            socket.emit('spectatorJoined', { 
+            return socket.emit('spectatorJoined', { 
                 roomCode, boardSize: room.boardSize, 
                 players: room.players, moveHistory: room.moveHistory 
             });
-            return;
         }
 
         let finalColor = userData.color;
         const usedColors = room.players.map(p => p.color);
-        if (usedColors.includes(finalColor)) finalColor = palette.find(c => !usedColors.includes(c));
+        if (usedColors.includes(finalColor)) {
+            const safeColors = palette.filter(c => !usedColors.includes(c));
+            finalColor = safeColors.length > 0 ? safeColors[0] : palette[0];
+        }
 
         const sessionId = Math.random().toString(36).substring(2, 15);
         room.players.push({ id: socket.id, sessionId, name: userData.name, color: finalColor });
@@ -118,7 +115,6 @@ io.on('connection', (socket) => {
             room.moveHistory = [];
             room.availableLines = [];
             
-            // Build the master list of all valid moves for this board size
             for (let r = 0; r < room.boardSize; r++) {
                 for (let c = 0; c < room.boardSize; c++) {
                     if (c < room.boardSize - 1) room.availableLines.push(`h-${r}-${c}`);
@@ -134,7 +130,6 @@ io.on('connection', (socket) => {
     socket.on('makeMove', ({ roomCode, lineId }) => {
         const room = rooms[roomCode];
         if (room && room.availableLines.includes(lineId)) {
-            // Remove line from available pool, add to history, and broadcast
             room.availableLines = room.availableLines.filter(id => id !== lineId);
             room.moveHistory.push(lineId);
             io.to(roomCode).emit('receiveMove', lineId);
@@ -149,8 +144,9 @@ io.on('connection', (socket) => {
         if (room) {
             room.started = false;
             room.moveHistory = [];
+            room.availableLines = [];
             stopTurnTimer(roomCode);
-            io.to(roomCode).emit('returnToLobby', room.players);
+            io.to(roomCode).emit('lobbyUpdated', { roomCode, hostId: room.players[0].id, players: room.players });
         }
     });
 });

@@ -47,12 +47,14 @@ window.onload = () => {
 
 // --- NETWORK EVENTS ---
 document.getElementById('host-btn').addEventListener('click', () => { 
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     myName = document.getElementById('player-name').value || 'P1'; myColor = document.getElementById('player-color').value;
     const boardSize = parseInt(document.getElementById('board-size').value);
     socket.emit('createGame', { name: myName, color: myColor, boardSize }); 
 });
 
 document.getElementById('join-btn').addEventListener('click', () => {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     const code = document.getElementById('room-input').value.toUpperCase();
     myName = document.getElementById('player-name').value || 'Player'; myColor = document.getElementById('player-color').value;
     if (code.length > 0) socket.emit('joinGame', { roomCode: code, name: myName, color: myColor });
@@ -76,6 +78,9 @@ socket.on('lobbyUpdated', (data) => {
     if (socket.id === data.hostId && roomPlayers.length >= 2) {
         document.getElementById('start-game-btn').classList.remove('hidden');
         document.getElementById('waiting-msg').classList.add('hidden');
+    } else {
+        document.getElementById('start-game-btn').classList.add('hidden');
+        document.getElementById('waiting-msg').classList.remove('hidden');
     }
     switchScreen(screens.lobby); saveSession();
 });
@@ -89,7 +94,6 @@ socket.on('gameStarted', (data) => {
     switchScreen(screens.game); resetLocalGame();
 });
 
-// --- RECONNECT HANDLING ---
 socket.on('rejoinSuccess', (data) => {
     currentRoom = data.roomCode; roomPlayers = data.players; dotsCount = data.boardSize; boxesCount = dotsCount - 1;
     myPlayerIndex = data.myPlayerIndex; myName = roomPlayers[myPlayerIndex].name; myColor = roomPlayers[myPlayerIndex].color;
@@ -112,7 +116,6 @@ socket.on('spectatorJoined', (data) => {
     if(data.moveHistory) data.moveHistory.forEach(lineId => processMove(lineId, true));
 });
 
-// --- GAME & TIMER EVENTS ---
 socket.on('receiveMove', (lineId) => { processMove(lineId, false); });
 
 socket.on('timerUpdate', (timeLeft) => {
@@ -123,10 +126,13 @@ socket.on('timerUpdate', (timeLeft) => {
 document.getElementById('rematch-btn').addEventListener('click', () => { if(myPlayerIndex !== -1) socket.emit('requestRematch', currentRoom); });
 socket.on('returnToLobby', () => { switchScreen(screens.lobby); });
 
-function switchScreen(screen) { Object.values(screens).forEach(s => { s.classList.remove('active'); s.classList.add('hidden'); }); screen.classList.remove('hidden'); screen.classList.add('active'); }
+function switchScreen(screen) { 
+    Object.values(screens).forEach(s => { s.classList.remove('active'); s.classList.add('hidden'); }); 
+    screen.classList.remove('hidden'); screen.classList.add('active'); 
+}
+
 function saveSession() { if (currentRoom && mySessionId) localStorage.setItem('dotsGame', JSON.stringify({ roomCode: currentRoom, sessionId: mySessionId })); }
 
-// --- GAME LOGIC ---
 function resetLocalGame() {
     scores = new Array(roomPlayers.length).fill(0); currentTurnIndex = 0; 
     document.getElementById('game-over-modal').classList.add('hidden');
@@ -140,21 +146,32 @@ function buildScoreboard() {
 
 function initBoard() {
     const container = document.querySelector('.board-container'); container.innerHTML = ''; 
-    const maxBoardWidth = window.innerWidth > 500 ? 400 : window.innerWidth - 30; 
-    const spacing = Math.floor(maxBoardWidth / dotsCount); const dotSize = 10; const lineThickness = 12; // Thicker lines for mobile tapping
+    const maxBoardWidth = window.innerWidth > 500 ? 370 : window.innerWidth - 60; 
+    const spacing = Math.floor(maxBoardWidth / dotsCount); 
+    const dotSize = 8; const lineThickness = 12; // Thicker click area for mobile
+    
     container.style.width = `${spacing * dotsCount}px`; container.style.height = `${spacing * dotsCount}px`;
 
     for (let r = 0; r < dotsCount; r++) {
         for (let c = 0; c < dotsCount; c++) {
             const dot = document.createElement('div'); dot.className = 'dot'; dot.style.left = `${c * spacing}px`; dot.style.top = `${r * spacing}px`; container.appendChild(dot);
+            
             if (c < dotsCount - 1) {
-                const hLine = document.createElement('div'); hLine.className = 'line h-line'; hLine.id = `h-${r}-${c}`; hLine.style.left = `${c * spacing + dotSize}px`; hLine.style.top = `${r * spacing + (dotSize - lineThickness)/2}px`; hLine.style.width = `${spacing - dotSize}px`; hLine.style.height = `${lineThickness}px`; setupLineClick(hLine); container.appendChild(hLine);
+                const hLine = document.createElement('div'); hLine.className = 'line h-line'; hLine.id = `h-${r}-${c}`; 
+                hLine.style.left = `${c * spacing + dotSize}px`; hLine.style.top = `${r * spacing + (dotSize - lineThickness)/2}px`; 
+                hLine.style.width = `${spacing - dotSize}px`; hLine.style.height = `${lineThickness}px`; 
+                setupLineClick(hLine); container.appendChild(hLine);
             }
             if (r < dotsCount - 1) {
-                const vLine = document.createElement('div'); vLine.className = 'line v-line'; vLine.id = `v-${r}-${c}`; vLine.style.left = `${c * spacing + (dotSize - lineThickness)/2}px`; vLine.style.top = `${r * spacing + dotSize}px`; vLine.style.width = `${lineThickness}px`; vLine.style.height = `${spacing - dotSize}px`; setupLineClick(vLine); container.appendChild(vLine);
+                const vLine = document.createElement('div'); vLine.className = 'line v-line'; vLine.id = `v-${r}-${c}`; 
+                vLine.style.left = `${c * spacing + (dotSize - lineThickness)/2}px`; vLine.style.top = `${r * spacing + dotSize}px`; 
+                vLine.style.width = `${lineThickness}px`; vLine.style.height = `${spacing - dotSize}px`; 
+                setupLineClick(vLine); container.appendChild(vLine);
             }
             if (r < dotsCount - 1 && c < dotsCount - 1) {
-                const box = document.createElement('div'); box.className = 'box'; box.id = `box-${r}-${c}`; box.style.left = `${c * spacing + dotSize}px`; box.style.top = `${r * spacing + dotSize}px`; box.style.width = `${spacing - dotSize}px`; box.style.height = `${spacing - dotSize}px`; container.appendChild(box);
+                const box = document.createElement('div'); box.className = 'box'; box.id = `box-${r}-${c}`; 
+                box.style.left = `${c * spacing + dotSize}px`; box.style.top = `${r * spacing + dotSize}px`; 
+                box.style.width = `${spacing - dotSize}px`; box.style.height = `${spacing - dotSize}px`; container.appendChild(box);
             }
         }
     }
@@ -168,7 +185,7 @@ function setupLineClick(line) {
 }
 
 function processMove(lineId, isReplay) {
-    const playerIndex = currentTurnIndex; // Deduced deterministically
+    const playerIndex = currentTurnIndex; 
     const line = document.getElementById(lineId); 
     if(!line) return;
     
@@ -220,7 +237,7 @@ function updateUI() {
 
 function checkWinCondition() {
     if (scores.reduce((a, b) => a + b, 0) === boxesCount * boxesCount) {
-        socket.emit('gameOver', currentRoom); // Tells server to stop the timer
+        socket.emit('gameOver', currentRoom); 
         setTimeout(() => {
             const maxScore = Math.max(...scores); const winners = roomPlayers.filter((p, i) => scores[i] === maxScore);
             const winnerText = document.getElementById('winner-text');

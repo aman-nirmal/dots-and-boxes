@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dots & Boxes</title>
+    <title>Dots & Boxes | Auto-Save</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -28,7 +28,9 @@
                         <option value="15">Epic (14x14 Boxes)</option>
                     </select>
                 </div>
+                
                 <div class="action-divider"><span>PLAY</span></div>
+                
                 <div class="action-buttons">
                     <button id="host-btn" class="primary-btn w-full">Create New Room</button>
                     <div class="join-section">
@@ -50,7 +52,7 @@
             </div>
         </div>
 
-        <div id="game-screen" class="panel hidden game-layout">
+        <div id="game-screen" class="panel hidden">
             <div class="game-core">
                 <div class="timer-display" id="timer-display">
                     <span id="turn-display">Waiting...</span>
