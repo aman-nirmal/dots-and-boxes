@@ -389,25 +389,19 @@ function checkWinCondition() {
         }, 500); 
     }
 
-    // --- DYNAMIC GRID ALIGNMENT ---
-function alignGridBackground() {
+}
+
+ function alignGridBackground() {
     const container = document.querySelector('.board-container');
     if (!container) return;
-    
     const rect = container.getBoundingClientRect();
-    
-    // Don't calculate if the board is hidden (width is 0)
-    if (rect.width === 0) return; 
-    
+    if (rect.width === 0) return;
     const dotSize = 8;
-    const offsetX = rect.left + (dotSize / 2);
-    const offsetY = rect.top + (dotSize / 2);
-    
-    // Instantly snap the background to perfectly intersect with the dots
+    // FIX: add scrollX/scrollY so page-relative backgroundPosition matches viewport rect
+    const offsetX = rect.left + window.scrollX + (dotSize / 2);
+    const offsetY = rect.top + window.scrollY + (dotSize / 2);
     document.body.style.backgroundPosition = `${offsetX}px ${offsetY}px`;
 }
 
-// Listen for ANY window size changes (Mobile URL bar hiding, rotation, dragging window)
 window.addEventListener('resize', alignGridBackground);
-
-}
+window.addEventListener('scroll', alignGridBackground); // handles mobile URL bar

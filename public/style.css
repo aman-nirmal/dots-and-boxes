@@ -10,17 +10,18 @@
 
 /* REPLACE YOUR BODY TAG WITH THIS */
 /* REPLACE YOUR BODY TAG WITH THIS */
+/* REPLACE YOUR BODY TAG WITH THIS */
 body { 
     background-color: var(--paper-bg); 
     background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px); 
     background-size: var(--grid-size, 40px) var(--grid-size, 40px); 
     color: var(--ink-dark); 
-    min-height: 100vh; /* FIX: Changed from height to min-height so it can stretch down */
+    min-height: 100vh; 
     display: flex; 
-    justify-content: center; 
-    align-items: flex-start; /* FIX: Starts content at the top on small screens */
+    justify-content: center; /* Perfectly centers it horizontally */
+    align-items: flex-start; /* Anchors it safely to the top */
     overflow-x: hidden; 
-    padding: 20px 0; /* Gives a little breathing room at the very top and bottom */
+    padding: 0; /* Let the container handle the spacing */
 }
 
 /* REPLACE YOUR CONTAINER TAG WITH THIS */
@@ -28,7 +29,10 @@ body {
     width: 100%; 
     max-width: 500px; 
     padding: 20px; 
-    margin: auto 0; /* FIX: Magically centers it vertically on desktops, but lets it scroll naturally on phones! */
+    margin: 0 auto; /* FIX: Centers horizontally, zero vertical margin */
+    
+    /* Smart top gap: 20px on small phones, 5vh on tablets, max 60px on desktops! */
+    margin-top: clamp(20px, 5vh, 60px); 
 }
 .panel { 
     width: 100%; 
