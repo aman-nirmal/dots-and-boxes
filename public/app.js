@@ -359,6 +359,8 @@ function updateUI() {
     });
     document.getElementById(`card-p${currentTurnIndex}`).classList.add('active-turn');
     turnDisplay.innerText = (myPlayerIndex !== -1 && currentTurnIndex === myPlayerIndex) ? "YOUR TURN" : `${roomPlayers[currentTurnIndex].name}'S TURN`;
+    
+    alignGridBackground(); // ← ADD THIS LINE
 }
 
 function checkWinCondition() {
