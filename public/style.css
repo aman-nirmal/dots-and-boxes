@@ -9,19 +9,27 @@
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace; }
 
 /* REPLACE YOUR BODY TAG WITH THIS */
+/* REPLACE YOUR BODY TAG WITH THIS */
 body { 
     background-color: var(--paper-bg); 
     background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px); 
     background-size: var(--grid-size, 40px) var(--grid-size, 40px); 
     color: var(--ink-dark); 
-    height: 100vh; 
+    min-height: 100vh; /* FIX: Changed from height to min-height so it can stretch down */
     display: flex; 
     justify-content: center; 
-    align-items: center; 
+    align-items: flex-start; /* FIX: Starts content at the top on small screens */
     overflow-x: hidden; 
+    padding: 20px 0; /* Gives a little breathing room at the very top and bottom */
 }
 
-.container { width: 100%; max-width: 500px; padding: 20px; }
+/* REPLACE YOUR CONTAINER TAG WITH THIS */
+.container { 
+    width: 100%; 
+    max-width: 500px; 
+    padding: 20px; 
+    margin: auto 0; /* FIX: Magically centers it vertically on desktops, but lets it scroll naturally on phones! */
+}
 .panel { 
     width: 100%; 
     display: none; 

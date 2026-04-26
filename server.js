@@ -12,32 +12,129 @@ const rooms = {};
 const palette = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#ec4899'];
 
 // --- UCLA-INSPIRED AI ALGORITHM ---
+// --- TRUE UCLA / BERLEKAMP MASTER AI ---
+// --- TRUE UCLA / BERLEKAMP MASTER AI (BUGFIXED) ---
 function getBotMove(room) {
     const size = room.boardSize;
     const history = new Set(room.moveHistory);
 
-    const getBoxCount = (r, c) => {
-        if (r < 0 || c < 0 || r >= size - 1 || c >= size - 1) return -1;
-        return [`h-${r}-${c}`, `h-${r+1}-${c}`, `v-${r}-${c}`, `v-${r}-${c+1}`].filter(l => history.has(l)).length;
+    // 1. Helper to grab the 4 lines for any box
+    const getBoxLines = (r, c) => {
+        if (r < 0 || c < 0 || r >= size - 1 || c >= size - 1) return [];
+        return [`h-${r}-${c}`, `h-${r+1}-${c}`, `v-${r}-${c}`, `v-${r}-${c+1}`];
     };
 
-    let capturingMoves = []; let safeMoves = []; let dangerousMoves = [];
+    let capturingMoves = []; 
+    let safeMoves = []; 
+    let dangerousMoves = [];
 
+    // Categorize every available line
     room.availableLines.forEach(line => {
-        const parts = line.split('-'); const type = parts[0], r = parseInt(parts[1]), c = parseInt(parts[2]);
-        let box1Count, box2Count;
-        if (type === 'h') { box1Count = getBoxCount(r - 1, c); box2Count = getBoxCount(r, c); } 
-        else { box1Count = getBoxCount(r, c - 1); box2Count = getBoxCount(r, c); }
+        const parts = line.split('-'); 
+        const type = parts[0], r = parseInt(parts[1]), c = parseInt(parts[2]);
+        
+        const b1Lines = getBoxLines(type === 'h' ? r - 1 : r, type === 'h' ? c : c - 1);
+        const b2Lines = getBoxLines(r, c);
+        
+        const b1Count = b1Lines.length > 0 ? b1Lines.filter(l => history.has(l)).length : -1;
+        const b2Count = b2Lines.length > 0 ? b2Lines.filter(l => history.has(l)).length : -1;
 
-        if (box1Count === 3 || box2Count === 3) capturingMoves.push(line); 
-        else if (box1Count === 2 || box2Count === 2) dangerousMoves.push(line); 
-        else safeMoves.push(line);
+        if (b1Count === 3 || b2Count === 3) {
+            capturingMoves.push({ line, b1Count, b2Count, b1Lines, b2Lines }); 
+        } else if (b1Count === 2 || b2Count === 2) {
+            dangerousMoves.push(line); 
+        } else {
+            safeMoves.push(line); 
+        }
     });
 
-    if (capturingMoves.length > 0) return capturingMoves[Math.floor(Math.random() * capturingMoves.length)];
-    if (safeMoves.length > 0) return safeMoves[Math.floor(Math.random() * safeMoves.length)];
-    if (dangerousMoves.length > 0) return dangerousMoves[Math.floor(Math.random() * dangerousMoves.length)];
-    return room.availableLines[0];
+    // STRATEGY 1: PERFECT CAPTURE & DOUBLE-CROSS
+    if (capturingMoves.length > 0) {
+        // If taking the box doesn't leave an adjacent 2-line box, it's totally safe to take.
+        let safeCapture = capturingMoves.find(m => m.b1Count !== 2 && m.b2Count !== 2);
+        if (safeCapture) return safeCapture.line;
+
+        // Otherwise, we are inside a chain. We must find out if it's the END of the chain.
+        for (let move of capturingMoves) {
+            let box2Lines = move.b1Count === 3 ? move.b2Lines : move.b1Lines;
+            let otherMissingLine = box2Lines.find(l => !history.has(l) && l !== move.line);
+            
+            if (otherMissingLine) {
+                // Look at the box on the OTHER side of the missing line
+                const parts = otherMissingLine.split('-');
+                const type = parts[0], r = parseInt(parts[1]), c = parseInt(parts[2]);
+                const nextB1Lines = getBoxLines(type === 'h' ? r - 1 : r, type === 'h' ? c : c - 1);
+                const nextB2Lines = getBoxLines(r, c);
+                
+                const isNextB1 = JSON.stringify(nextB1Lines) === JSON.stringify(box2Lines);
+                const nextBoxLines = isNextB1 ? nextB2Lines : nextB1Lines;
+                const nextBoxCount = nextBoxLines.length > 0 ? nextBoxLines.filter(l => history.has(l)).length : -1;
+
+                if (nextBoxCount === 2) {
+                    // The chain continues! Keep eating boxes!
+                    return move.line; 
+                } else if (safeMoves.length === 0) {
+                    // This is the end of the chain (exactly 2 boxes left). Execute the sacrifice!
+                    return otherMissingLine; 
+                }
+            }
+        }
+        
+        // Absolute fallback to just take the point
+        return capturingMoves[0].line;
+    }
+
+    // STRATEGY 2: PLAY SAFE (Center Control)
+    if (safeMoves.length > 0) {
+        safeMoves.sort((a, b) => {
+            const getDist = (line) => {
+                const parts = line.split('-');
+                const r = parseInt(parts[1]), c = parseInt(parts[2]);
+                const center = (size - 1) / 2;
+                return Math.abs(r - center) + Math.abs(c - center);
+            };
+            return getDist(a) - getDist(b);
+        });
+        const topPicks = safeMoves.slice(0, Math.max(1, Math.floor(safeMoves.length * 0.3)));
+        return topPicks[Math.floor(Math.random() * topPicks.length)];
+    }
+
+    // STRATEGY 3: CHAIN MINIMIZATION (Forced to open a chain)
+    if (dangerousMoves.length > 0) {
+        let bestSacrifice = dangerousMoves[0];
+        let minBoxesGiven = Infinity;
+
+        dangerousMoves.forEach(testLine => {
+            let simHistory = new Set(history);
+            simHistory.add(testLine); 
+            let boxesGiven = 0;
+            let chainReaction = true;
+
+            while (chainReaction) {
+                chainReaction = false;
+                for (let r = 0; r < size - 1; r++) {
+                    for (let c = 0; c < size - 1; c++) {
+                        let lines = getBoxLines(r, c);
+                        let drawn = lines.filter(l => simHistory.has(l));
+                        if (drawn.length === 3) { 
+                            simHistory.add(lines.find(l => !simHistory.has(l))); 
+                            boxesGiven++;
+                            chainReaction = true; 
+                        }
+                    }
+                }
+            }
+
+            if (boxesGiven < minBoxesGiven) {
+                minBoxesGiven = boxesGiven;
+                bestSacrifice = testLine;
+            }
+        });
+
+        return bestSacrifice;
+    }
+    
+    return room.availableLines[0]; 
 }
 
 // --- UPDATED TIMER ---

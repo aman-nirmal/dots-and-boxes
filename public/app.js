@@ -37,16 +37,37 @@ function playSound(type) {
     }
 }
 
+// --- NEW: Helper to save preferences instantly ---
+function savePlayerPrefs() {
+    const name = document.getElementById('player-name').value;
+    const color = document.getElementById('player-color').value;
+    localStorage.setItem('dotrixPrefs', JSON.stringify({ name, color }));
+}
+
+// Auto-save the name exactly as the user types it
+document.getElementById('player-name').addEventListener('input', savePlayerPrefs);
+
 function renderPalette(containerId, inputId, defaultColor) {
     const container = document.getElementById(containerId); const input = document.getElementById(inputId); input.value = defaultColor;
     paletteColors.forEach(color => {
         const swatch = document.createElement('div'); swatch.className = 'swatch'; swatch.style.backgroundColor = color;
         if(color === defaultColor) swatch.classList.add('selected');
-        swatch.onclick = () => { container.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected')); swatch.classList.add('selected'); input.value = color; };
+        swatch.onclick = () => { 
+            container.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected')); 
+            swatch.classList.add('selected'); 
+            input.value = color; 
+            savePlayerPrefs(); // Auto-save the color when clicked
+        };
         container.appendChild(swatch);
     });
 }
-renderPalette('player-palette', 'player-color', '#3b82f6'); 
+
+// --- NEW: Load saved preferences before rendering the palette ---
+const savedPrefs = JSON.parse(localStorage.getItem('dotrixPrefs')) || {};
+if (savedPrefs.name) document.getElementById('player-name').value = savedPrefs.name;
+const initialColor = savedPrefs.color || '#3b82f6';
+
+renderPalette('player-palette', 'player-color', initialColor); 
 
 window.onload = () => {
     const savedData = JSON.parse(localStorage.getItem('dotsGame'));
