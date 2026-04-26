@@ -11,6 +11,36 @@ app.use(express.static('public'));
 const rooms = {};
 const palette = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#ec4899'];
 
+// --- UCLA-INSPIRED AI ALGORITHM ---
+function getBotMove(room) {
+    const size = room.boardSize;
+    const history = new Set(room.moveHistory);
+
+    const getBoxCount = (r, c) => {
+        if (r < 0 || c < 0 || r >= size - 1 || c >= size - 1) return -1;
+        return [`h-${r}-${c}`, `h-${r+1}-${c}`, `v-${r}-${c}`, `v-${r}-${c+1}`].filter(l => history.has(l)).length;
+    };
+
+    let capturingMoves = []; let safeMoves = []; let dangerousMoves = [];
+
+    room.availableLines.forEach(line => {
+        const parts = line.split('-'); const type = parts[0], r = parseInt(parts[1]), c = parseInt(parts[2]);
+        let box1Count, box2Count;
+        if (type === 'h') { box1Count = getBoxCount(r - 1, c); box2Count = getBoxCount(r, c); } 
+        else { box1Count = getBoxCount(r, c - 1); box2Count = getBoxCount(r, c); }
+
+        if (box1Count === 3 || box2Count === 3) capturingMoves.push(line); 
+        else if (box1Count === 2 || box2Count === 2) dangerousMoves.push(line); 
+        else safeMoves.push(line);
+    });
+
+    if (capturingMoves.length > 0) return capturingMoves[Math.floor(Math.random() * capturingMoves.length)];
+    if (safeMoves.length > 0) return safeMoves[Math.floor(Math.random() * safeMoves.length)];
+    if (dangerousMoves.length > 0) return dangerousMoves[Math.floor(Math.random() * dangerousMoves.length)];
+    return room.availableLines[0];
+}
+
+// --- UPDATED TIMER ---
 function startTurnTimer(roomCode) {
     const room = rooms[roomCode];
     if (!room || !room.started) return; 
@@ -19,6 +49,24 @@ function startTurnTimer(roomCode) {
     room.timeLeft = 15;
     io.to(roomCode).emit('timerUpdate', room.timeLeft);
 
+    const currentPlayer = room.players[room.currentTurnIndex || 0];
+
+    // IF IT IS THE BOT'S TURN:
+    if (currentPlayer && currentPlayer.isBot && !room.moveLocked) {
+        room.moveLocked = true;
+        setTimeout(() => {
+            if (rooms[roomCode] && rooms[roomCode].started) {
+                const botLine = getBotMove(rooms[roomCode]);
+                if (botLine) {
+                    stopTurnTimer(roomCode);
+                    rooms[roomCode].availableLines = rooms[roomCode].availableLines.filter(id => id !== botLine);
+                    rooms[roomCode].moveHistory.push(botLine);
+                    io.to(roomCode).emit('receiveMove', botLine);
+                }
+            }
+        }, 1000); 
+    }
+
     room.timerInterval = setInterval(() => {
         room.timeLeft--;
         io.to(roomCode).emit('timerUpdate', room.timeLeft);
@@ -26,12 +74,8 @@ function startTurnTimer(roomCode) {
         if (room.timeLeft <= 0) {
             clearInterval(room.timerInterval);
             
-            const currentPlayer = room.players[room.currentTurnIndex || 0];
-            
-            // AFK Tracking
-            if (currentPlayer && !currentPlayer.isDead) {
+            if (currentPlayer && !currentPlayer.isDead && !currentPlayer.isBot) {
                 currentPlayer.afkCount = (currentPlayer.afkCount || 0) + 1;
-                
                 if (currentPlayer.afkCount >= 3) {
                     currentPlayer.isDead = true;
                     const aliveCount = room.players.filter(p => !p.isDead).length;
@@ -46,9 +90,8 @@ function startTurnTimer(roomCode) {
                 }
             }
 
-            // Auto-move if not kicked
             if (room.availableLines && room.availableLines.length > 0) {
-                room.moveLocked = true; // Prevent overlapping clicks
+                room.moveLocked = true; 
                 const randomIndex = Math.floor(Math.random() * room.availableLines.length);
                 const randomLineId = room.availableLines.splice(randomIndex, 1)[0];
                 room.moveHistory.push(randomLineId);
@@ -58,23 +101,56 @@ function startTurnTimer(roomCode) {
     }, 1000);
 }
 
+// --- MISSING STOP TIMER FUNCTION ---
 function stopTurnTimer(roomCode) {
-    if (rooms[roomCode]) clearInterval(rooms[roomCode].timerInterval);
+    const room = rooms[roomCode];
+    if (room && room.timerInterval) {
+        clearInterval(room.timerInterval);
+        room.timerInterval = null;
+    }
 }
 
 io.on('connection', (socket) => {
     
+    // --- BOT ROUTE ---
+    socket.on('createBotGame', (userData) => {
+        const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+        const sessionId = Math.random().toString(36).substring(2, 15);
+        
+        rooms[roomCode] = { 
+            boardSize: userData.boardSize, started: true, moveHistory: [], availableLines: [], 
+            timerInterval: null, timeLeft: 15, currentTurnIndex: 0, moveLocked: false,
+            players: [
+                { id: socket.id, sessionId, name: userData.name, color: userData.color, afkCount: 0, isDead: false, isBot: false },
+                { id: 'bot-1', sessionId: 'bot-1', name: 'Computer', color: '#64748b', afkCount: 0, isDead: false, isBot: true }
+            ] 
+        };
+
+        const room = rooms[roomCode];
+        
+        for (let r = 0; r < room.boardSize; r++) {
+            for (let c = 0; c < room.boardSize; c++) {
+                if (c < room.boardSize - 1) room.availableLines.push(`h-${r}-${c}`);
+                if (r < room.boardSize - 1) room.availableLines.push(`v-${r}-${c}`);
+            }
+        }
+
+        socket.join(roomCode);
+        socket.emit('gameCreated', { roomCode, sessionId });
+        io.to(roomCode).emit('gameStarted', room);
+        startTurnTimer(roomCode);
+    });
+
     socket.on('createGame', (userData) => {
         const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
         const sessionId = Math.random().toString(36).substring(2, 15);
-        rooms[roomCode] = { 
-            boardSize: userData.boardSize, started: false, moveHistory: [], availableLines: [], 
-            timerInterval: null, timeLeft: 15, currentTurnIndex: 0, moveLocked: false,
-            players: [{ id: socket.id, sessionId, name: userData.name, color: userData.color, afkCount: 0, isDead: false }] 
-        };
+        rooms[roomCode] = { boardSize: userData.boardSize, started: false, players: [], moveHistory: [], availableLines: [], timerInterval: null, timeLeft: 15, currentTurnIndex: 0, moveLocked: false };
+        const room = rooms[roomCode];
+
+        room.players.push({ id: socket.id, sessionId, name: userData.name, color: userData.color, afkCount: 0, isDead: false, isBot: false });
         socket.join(roomCode);
         socket.emit('gameCreated', { roomCode, sessionId });
-        io.to(roomCode).emit('lobbyUpdated', { roomCode, hostId: socket.id, players: rooms[roomCode].players });
+        io.to(roomCode).emit('lobbyUpdated', { roomCode, hostId: socket.id, players: room.players });
     });
 
     socket.on('joinGame', (userData) => {
@@ -105,7 +181,13 @@ io.on('connection', (socket) => {
             if (playerIndex !== -1) {
                 room.players[playerIndex].id = socket.id;
                 socket.join(data.roomCode);
-                return socket.emit('rejoinSuccess', { roomCode: data.roomCode, boardSize: room.boardSize, players: room.players, myPlayerIndex: playerIndex, moveHistory: room.moveHistory, gameStarted: room.started });
+                socket.emit('rejoinSuccess', { roomCode: data.roomCode, boardSize: room.boardSize, players: room.players, myPlayerIndex: playerIndex, moveHistory: room.moveHistory, gameStarted: room.started });
+                
+                // BUG FIX: If the game hasn't started, just redraw the lobby UI
+                if (!room.started) {
+                    io.to(data.roomCode).emit('lobbyUpdated', { roomCode: data.roomCode, hostId: room.players[0].id, players: room.players });
+                }
+                return;
             }
         }
         socket.emit('errorMsg', 'Session expired. Please join as a new player.');

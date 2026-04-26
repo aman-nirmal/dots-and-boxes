@@ -19,6 +19,7 @@
                     <div id="player-palette" class="palette"></div>
                     <input type="hidden" id="player-color" value="#3b82f6">
                 </div>
+                
                 <div class="size-selector">
                     <label>Grid Size (Host Only):</label>
                     <select id="board-size">
@@ -27,7 +28,9 @@
                         <option value="15">Epic (14x14 Boxes)</option>
                     </select>
                 </div>
+
                 <div class="action-divider"><span>PLAY</span></div>
+
                 <div class="action-buttons">
                     <button id="host-btn" class="primary-btn w-full">Create New Room</button>
                     <div class="join-section">
@@ -35,8 +38,31 @@
                         <button id="join-btn" class="secondary-btn">Join Room</button>
                     </div>
                 </div>
+
+                <div class="action-divider"><span>OR</span></div>
+
+                <button id="play-bot-btn" class="secondary-btn w-full" style="border-style: dashed;">Play vs Computer</button>
             </div>
             <p id="error-msg" class="error-text"></p>
+        </div>
+
+        <div id="bot-setup-screen" class="panel hidden">
+            <h1>Vs Computer</h1>
+            <div class="card">
+                <h3>Select Match Settings</h3>
+                <div class="size-selector">
+                    <label>Grid Size:</label>
+                    <select id="bot-board-size">
+                        <option value="6">Quick (5x5 Boxes)</option>
+                        <option value="10" selected>Classic (9x9 Boxes)</option>
+                        <option value="15">Epic (14x14 Boxes)</option>
+                    </select>
+                </div>
+                <div class="action-buttons" style="margin-top: 15px;">
+                    <button id="start-bot-game-btn" class="primary-btn w-full">Start Match</button>
+                    <button id="back-to-home-btn" class="secondary-btn w-full" style="margin-top: 15px;">Back to Menu</button>
+                </div>
+            </div>
         </div>
 
         <div id="lobby-screen" class="panel hidden">

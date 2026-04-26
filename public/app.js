@@ -1,6 +1,11 @@
 const socket = io();
 
-const screens = { landing: document.getElementById('landing-screen'), lobby: document.getElementById('lobby-screen'), game: document.getElementById('game-screen') };
+const screens = { 
+    landing: document.getElementById('landing-screen'), 
+    botSetup: document.getElementById('bot-setup-screen'), 
+    lobby: document.getElementById('lobby-screen'), 
+    game: document.getElementById('game-screen') 
+};
 const timerText = document.getElementById('timer-display');
 const turnDisplay = document.getElementById('turn-display');
 const paletteColors = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#ec4899'];
@@ -50,22 +55,39 @@ window.onload = () => {
     }
 };
 
-// --- NETWORK EVENTS ---
+// --- MAIN MENU ACTIONS ---
 document.getElementById('host-btn').addEventListener('click', () => { 
-    myName = document.getElementById('player-name').value || 'P1'; myColor = document.getElementById('player-color').value;
+    myName = document.getElementById('player-name').value || 'Player'; 
+    myColor = document.getElementById('player-color').value;
     const boardSize = parseInt(document.getElementById('board-size').value);
     socket.emit('createGame', { name: myName, color: myColor, boardSize }); 
 });
 
 document.getElementById('join-btn').addEventListener('click', () => {
     const code = document.getElementById('room-input').value.toUpperCase();
-    myName = document.getElementById('player-name').value || 'Player'; myColor = document.getElementById('player-color').value;
+    myName = document.getElementById('player-name').value || 'Player'; 
+    myColor = document.getElementById('player-color').value;
     if (code.length > 0) socket.emit('joinGame', { roomCode: code, name: myName, color: myColor });
 });
 
-document.getElementById('start-game-btn').addEventListener('click', () => socket.emit('startGame', currentRoom));
+// --- BOT SETUP ACTIONS ---
+document.getElementById('play-bot-btn').addEventListener('click', () => {
+    switchScreen(screens.botSetup);
+});
 
-// LEAVE SYSTEM
+document.getElementById('back-to-home-btn').addEventListener('click', () => {
+    switchScreen(screens.landing);
+});
+
+document.getElementById('start-bot-game-btn').addEventListener('click', () => {
+    myName = document.getElementById('player-name').value || 'Player'; 
+    myColor = document.getElementById('player-color').value;
+    const boardSize = parseInt(document.getElementById('bot-board-size').value);
+    
+    socket.emit('createBotGame', { name: myName, color: myColor, boardSize }); 
+});
+
+// --- LEAVE SYSTEM ---
 function leaveGame() {
     if (currentRoom) socket.emit('leaveRoom', currentRoom);
     localStorage.removeItem('dotsGame'); 
@@ -75,6 +97,7 @@ document.getElementById('leave-lobby-btn').addEventListener('click', leaveGame);
 document.getElementById('leave-game-btn').addEventListener('click', leaveGame);
 document.getElementById('leave-modal-btn').addEventListener('click', leaveGame);
 
+// --- NETWORK EVENTS ---
 socket.on('errorMsg', (msg) => { document.getElementById('error-msg').innerText = msg; localStorage.removeItem('dotsGame'); });
 socket.on('gameCreated', (data) => { mySessionId = data.sessionId; currentRoom = data.roomCode; saveSession(); });
 socket.on('joinSuccess', (data) => { mySessionId = data.sessionId; });
@@ -97,6 +120,11 @@ socket.on('lobbyUpdated', (data) => {
     switchScreen(screens.lobby); saveSession();
 });
 
+// Starts the timer when Host clicks "Start Game" in a multiplayer lobby
+if (document.getElementById('start-game-btn')) {
+    document.getElementById('start-game-btn').addEventListener('click', () => socket.emit('startGame', currentRoom));
+}
+
 socket.on('gameStarted', (data) => {
     roomPlayers = data.players; dotsCount = data.boardSize; boxesCount = dotsCount - 1;
     roomPlayers.forEach((p, index) => { document.documentElement.style.setProperty(`--p${index}-color`, p.color); if (p.id === socket.id) myPlayerIndex = index; });
@@ -112,9 +140,8 @@ socket.on('rejoinSuccess', (data) => {
         switchScreen(screens.game); resetLocalGame();
         data.moveHistory.forEach(lineId => processMove(lineId, true));
         updateUI();
-    } else {
-        socket.emit('joinGame', { roomCode: currentRoom, name: myName, color: myColor });
     }
+    // BUG FIX: Removed the 'else' block that was blindly requesting a new player slot!
 });
 
 socket.on('spectatorJoined', (data) => {
@@ -149,7 +176,7 @@ function fireConfetti() {
         particleCount: 150,
         spread: 100,
         origin: { y: 0.5 },
-        colors: paletteColors // Uses your game's ink palette!
+        colors: paletteColors 
     });
 }
 
@@ -158,7 +185,7 @@ socket.on('playerWonByDefault', (winner) => {
     winnerText.innerText = `${winner.name} Wins by Default!`;
     winnerText.style.color = winner.color;
     document.getElementById('game-over-modal').classList.remove('hidden');
-    fireConfetti(); // Trigger confetti!
+    fireConfetti();
     localStorage.removeItem('dotsGame'); 
 });
 
@@ -189,8 +216,6 @@ function resetLocalGame() {
     initBoard(); updateUI();
 }
 
-// REPLACE THIS FUNCTION IN app.js
-
 function initBoard() {
     const container = document.querySelector('.board-container'); 
     container.innerHTML = ''; 
@@ -198,19 +223,12 @@ function initBoard() {
     const dotSize = 8; 
     const lineThickness = 6; 
 
-    // Find the maximum safe width for the current screen
     const maxSafeWidth = window.innerWidth > 500 ? 400 : window.innerWidth - 40;
-    
-    // DYNAMIC SPACING: Calculate exactly how much space we have per dot
     let spacing = Math.floor((maxSafeWidth - dotSize) / (dotsCount - 1));
-    
-    // Cap the spacing so smaller grids (like 6x6) don't become comically huge
     if (spacing > 40) spacing = 40; 
     
-    // Sync the CSS background graph paper to our newly calculated spacing
     document.documentElement.style.setProperty('--grid-size', `${spacing}px`);
     
-    // Set the exact physical width of the container
     const exactWidth = (spacing * (dotsCount - 1)) + dotSize;
     container.style.width = `${exactWidth}px`; 
     container.style.height = `${exactWidth}px`;
@@ -338,7 +356,7 @@ function checkWinCondition() {
             if (winners.length === 1) { 
                 winnerText.innerText = `${winners[0].name} Wins!`; 
                 winnerText.style.color = winners[0].color; 
-                fireConfetti(); // Trigger confetti for a clear winner!
+                fireConfetti(); 
             } else { 
                 winnerText.innerText = "It's a Tie!"; 
                 winnerText.style.color = "var(--ink-dark)"; 

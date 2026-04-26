@@ -61,8 +61,21 @@ button { padding: 12px 20px; border: 3px solid var(--ink-dark); font-weight: bol
 .secondary-btn { background: white; color: var(--ink-dark); }
 .secondary-btn:hover { background: #eee; }
 
-.action-divider { margin: 20px 0 10px 0; border-bottom: 2px dashed var(--ink-dark); position: relative; }
-.action-divider span { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--paper-bg); padding: 0 15px; font-weight: bold; font-size: 1.2rem; }
+.action-divider { 
+    margin: 15px 0; /* Reduced to perfectly complement the card's natural gap */
+    border-bottom: 2px dashed var(--ink-dark); 
+    position: relative; 
+}
+.action-divider span { 
+    position: absolute; 
+    top: -12px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    background: var(--paper-bg); 
+    padding: 0 15px; 
+    font-weight: bold; 
+    font-size: 1.2rem; 
+}
 
 /* FIX FOR SQUISHED JOIN INPUT */
 .join-section { display: flex; gap: 10px; width: 100%; }
