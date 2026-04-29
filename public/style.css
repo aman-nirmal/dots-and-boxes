@@ -1,16 +1,15 @@
+/* global design tokens */
 :root { 
     --p0-color: #000; --p1-color: #000; --p2-color: #000; --p3-color: #000; 
-    --ink-dark: #111111; --paper-bg: #ffffff; --grid-line: #e5e5e5; 
-    /* Dynamic Grid Variables */
+    --ink-dark: #111111; --paper-bg: #fffaf1; --grid-line: #e5e5e5; 
     --grid-size: 40px;
     --bg-offset-x: 50%;
     --bg-offset-y: 0px;
 }
+
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace; }
 
-/* REPLACE YOUR BODY TAG WITH THIS */
-/* REPLACE YOUR BODY TAG WITH THIS */
-/* REPLACE YOUR BODY TAG WITH THIS */
+/* main body layout with dynamic grid background */
 body { 
     background-color: var(--paper-bg); 
     background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px); 
@@ -18,38 +17,42 @@ body {
     color: var(--ink-dark); 
     min-height: 100vh; 
     display: flex; 
-    justify-content: center; /* Perfectly centers it horizontally */
-    align-items: flex-start; /* Anchors it safely to the top */
+    justify-content: center; 
+    align-items: flex-start; 
     overflow-x: hidden; 
-    padding: 0; /* Let the container handle the spacing */
+    padding: 0; 
 }
 
-/* REPLACE YOUR CONTAINER TAG WITH THIS */
+/* center container logic for responsiveness */
 .container { 
     width: 100%; 
     max-width: 500px; 
     padding: 20px; 
-    margin: 0 auto; /* FIX: Centers horizontally, zero vertical margin */
-    
-    /* Smart top gap: 20px on small phones, 5vh on tablets, max 60px on desktops! */
+    margin: 0 auto; 
     margin-top: clamp(20px, 5vh, 60px); 
 }
+
+/* ui screens */
 .panel { 
     width: 100%; 
     display: none; 
     flex-direction: column; 
-    align-items: center; /* FORCES strict horizontal centering */
+    align-items: center; 
     gap: 20px; 
     text-align: center; 
 }
 .panel.active { display: flex; animation: fadeIn 0.3s ease; }
+
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
+/* typography */
 h1 { font-size: 2.5rem; font-weight: 800; border-bottom: 4px solid var(--ink-dark); padding-bottom: 10px; display: inline-block; margin: 0 auto 10px; }
-h2 { font-size: 1.5rem; } h3 { font-size: 1.2rem; margin-bottom: 10px; text-decoration: underline; }
+h2 { font-size: 1.5rem; } 
+h3 { font-size: 1.2rem; margin-bottom: 10px; text-decoration: underline; }
 
+/* form cards */
 .card { 
-    width: 100%; /* FIX: Forces the card to stay a consistent size */
+    width: 100%;
     background: var(--paper-bg); 
     padding: 25px; 
     border: 3px solid var(--ink-dark); 
@@ -60,21 +63,23 @@ h2 { font-size: 1.5rem; } h3 { font-size: 1.2rem; margin-bottom: 10px; text-deco
 }
 
 input[type="text"], select { padding: 10px; border: 2px solid var(--ink-dark); text-align: center; font-size: 1rem; font-weight: bold; outline: none; background: transparent; width: 100%; }
-input[type="text"]:focus, select:focus { background: #f0f0f0; }
+input[type="text"]:focus, select:focus { background: #fffaf1; }
 
+/* color picker */
 .palette-container, .size-selector { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 10px 0; font-weight: bold; }
 .palette { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; max-width: 220px; }
 .swatch { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: 0.1s; }
 .swatch.selected { border: 3px solid var(--ink-dark); transform: scale(1.2); }
 
+/* interactive elements */
 button { padding: 12px 20px; border: 3px solid var(--ink-dark); font-weight: bold; font-size: 1.1rem; cursor: pointer; text-transform: uppercase; transition: 0.1s; }
 .primary-btn { background: var(--ink-dark); color: var(--paper-bg); }
 .primary-btn:hover { background: #333; }
-.secondary-btn { background: white; color: var(--ink-dark); }
-.secondary-btn:hover { background: #eee; }
+.secondary-btn { background: #fffaf1; color: var(--ink-dark); }
+.secondary-btn:hover { background: #fffaf1; }
 
 .action-divider { 
-    margin: 15px 0; /* Reduced to perfectly complement the card's natural gap */
+    margin: 15px 0;
     border-bottom: 2px dashed var(--ink-dark); 
     position: relative; 
 }
@@ -89,54 +94,63 @@ button { padding: 12px 20px; border: 3px solid var(--ink-dark); font-weight: bol
     font-size: 1.2rem; 
 }
 
-/* FIX FOR SQUISHED JOIN INPUT */
-.join-section { display: flex; gap: 10px; width: 100%; }
-#room-input { flex: 1 1 auto; min-width: 120px; } 
 .join-section { 
     display: flex; 
     gap: 10px; 
     width: 100%; 
-    margin-top: 15px; /* Adds the required space below the Create button */
+    margin-top: 15px;
+}
+.join-section button { 
+    flex: 0 0 auto; 
+    white-space: nowrap; 
 }
 #room-input { 
     flex: 1 1 auto; 
     min-width: 120px; 
 } 
-.join-section button { 
-    flex: 0 0 auto; 
-    white-space: nowrap; 
-}
 
 .w-full { width: 100%; }
+
 .code-display { 
     font-size: 2.5rem; 
     font-weight: bold; 
     letter-spacing: 10px; 
     border: 2px dashed var(--ink-dark); 
-    padding: 10px 10px 10px 20px; /* INCREASED left padding to balance the letter-spacing */
+    padding: 10px 10px 10px 20px; 
     margin-top: 10px; 
     display: inline-block; 
-    transform: translateX(-5px); /* Nudges the entire box slightly to the left */
-}
+    transform: translateX(-5px);
+} /* NOTE: added missing closing brace here! */
+
 .error-text { color: red; margin-top: 10px; font-weight: bold; }
 
+/* lobby styling */
 .player-list { list-style: none; padding: 0; text-align: left; margin: 10px 0; }
 .player-list li { padding: 10px; border-bottom: 1px dashed var(--ink-dark); font-weight: bold; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; justify-content: center; }
 .player-list li span { width: 15px; height: 15px; border-radius: 50%; display: inline-block; border: 1px solid var(--ink-dark); }
 .waiting-text { font-style: italic; color: #666; margin-bottom: 10px; }
 
-/* GAME UI */
+/* top game bar */
 .game-header { width: 100%; display: flex; justify-content: flex-end; margin-bottom: 10px; }
 .exit-btn { padding: 5px 10px; font-size: 0.8rem; }
 
+/* live scoreboard */
 .scoreboard { display: flex; justify-content: space-between; align-items: center; background: var(--paper-bg); padding: 10px 20px; border: 3px solid var(--ink-dark); box-shadow: 4px 4px 0px var(--ink-dark); margin: 0 auto 30px auto; font-weight: bold; width: 100%; max-width: 450px; box-sizing: border-box; }
 .side-scores { display: flex; flex-direction: column; gap: 10px; }
 .score-card { display: flex; flex-direction: column; align-items: center; opacity: 0.4; transition: 0.2s; }
 .score-card.active-turn { opacity: 1; transform: scale(1.1); text-decoration: underline; }
 .score-card.dead { opacity: 0.1 !important; filter: grayscale(100%); }
 .score-card.dead .name { text-decoration: line-through; }
-.score-card.p-0 { color: var(--p0-color); } .score-card.p-1 { color: var(--p1-color); } .score-card.p-2 { color: var(--p2-color); } .score-card.p-3 { color: var(--p3-color); }
-.name { font-size: 1rem; text-transform: uppercase; } .score { font-size: 2rem; line-height: 1; }
+
+/* dynamic player colors assigned via js */
+.score-card.p-0 { color: var(--p0-color); } 
+.score-card.p-1 { color: var(--p1-color); } 
+.score-card.p-2 { color: var(--p2-color); } 
+.score-card.p-3 { color: var(--p3-color); }
+
+.name { font-size: 1rem; text-transform: uppercase; } 
+.score { font-size: 2rem; line-height: 1; }
+
 .turn-indicator { 
     padding: 5px; 
     border-bottom: 2px solid var(--ink-dark); 
@@ -144,19 +158,17 @@ button { padding: 12px 20px; border: 3px solid var(--ink-dark); font-weight: bol
     display: flex; 
     flex-direction: column; 
     align-items: center;
-    min-height: 70px;        /* ← ADD: locks the scoreboard height */
-    justify-content: center; /* ← ADD: keeps content vertically centered */
+    min-height: 70px;        
+    justify-content: center; 
 }
-
 #turn-display {
-    white-space: nowrap;          /* ← never wraps to 2 lines */
-    font-size: clamp(0.75rem, 2.5vw, 1rem); /* ← shrinks to fit long names */
+    white-space: nowrap;         
+    font-size: clamp(0.75rem, 2.5vw, 1rem); 
 }
 
 .hidden { display: none !important; }
 
-/* DYNAMIC BOARD */
-/* STRICT CENTERING FOR THE BOARD */
+/* the physical game board */
 .board-wrapper { 
     position: relative; 
     display: flex; 
@@ -170,10 +182,13 @@ button { padding: 12px 20px; border: 3px solid var(--ink-dark); font-weight: bol
     padding: 0px; 
     touch-action: none; 
 }
+
+/* board elements */
 .dot { position: absolute; width: 8px; height: 8px; background: var(--ink-dark); border-radius: 50%; z-index: 3; }
 .line { position: absolute; background: transparent; cursor: pointer; z-index: 2; transition: 0.1s; }
 .line:hover { background: rgba(0,0,0,0.1); }
 
+/* coloring lines and boxes when players claim them */
 .line.claimed-p0 { background: var(--p0-color) !important; pointer-events: none; }
 .line.claimed-p1 { background: var(--p1-color) !important; pointer-events: none; }
 .line.claimed-p2 { background: var(--p2-color) !important; pointer-events: none; }
@@ -185,18 +200,18 @@ button { padding: 12px 20px; border: 3px solid var(--ink-dark); font-weight: bol
 .box.claimed-p2 { background: var(--p2-color); }
 .box.claimed-p3 { background: var(--p3-color); }
 
-/* REPLACE YOUR EXISTING .modal CLASS AT THE BOTTOM OF THE CSS */
+/* victory screen floating over the board */
 .modal { 
     position: absolute; 
-    top: 50%; 
+    top: 60%;
     left: 50%; 
-    transform: translate(-50%, -50%); /* Perfectly centers it over the board */
+    transform: translate(-50%, -50%);
     width: 100%; 
     max-width: 350px;
-    height: auto; /* Allows it to expand as needed */
+    height: auto;
     background: var(--paper-bg); 
     border: 4px solid var(--ink-dark); 
-    box-shadow: 8px 8px 0px var(--ink-dark); /* Adds the chunky retro shadow */
+    box-shadow: 8px 8px 0px var(--ink-dark);
     display: flex; 
     flex-direction: column; 
     justify-content: center; 
@@ -204,6 +219,6 @@ button { padding: 12px 20px; border: 3px solid var(--ink-dark); font-weight: bol
     z-index: 100; 
     gap: 20px; 
     padding: 30px; 
-    box-sizing: border-box; /* Prevents padding from breaking the width */
+    box-sizing: border-box;
 }
 .final-scores { font-size: 1.5rem; display: flex; flex-direction: column; gap: 10px; font-weight: bold; text-align: center; width: 100%; }
