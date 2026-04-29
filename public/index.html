@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Dotrix</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=2.0">
 </head>
 <body>
     
@@ -43,6 +43,15 @@
                 <div class="action-divider"><span>OR</span></div>
 
                 <button id="play-bot-btn" class="secondary-btn w-full" style="border-style: dashed;">Play vs Computer</button>
+            </div>
+
+            <div class="card" style="text-align: left; margin-top: 10px; font-size: 0.9rem; line-height: 1.4;">
+                <h3 style="text-align: center; margin-bottom: 5px; text-decoration: underline;">How to Play</h3>
+                <p><strong>Rules:</strong> Players take turns joining two adjacent dots with a line. A player that completes the fourth side of a square (a box) colors that box and <strong>must play again</strong>. The player with the most boxes wins.</p>
+                
+                <h3 style="text-align: center; margin-top: 15px; margin-bottom: 5px; text-decoration: underline;">Strategy</h3>
+                <p><strong>The Double-Cross:</strong> At the end of the game, long chains of boxes (3+) remain. If forced into a chain, a Master will take all but two boxes, <em>sacrificing the last two</em> to force the opponent to open the next long chain!</p>
+                <p style="margin-top: 10px;"><strong>The Long Chain Rule:</strong> The Computer uses Combinatorial Game Theory to calculate <em>"double-box moves"</em>. By counting the grid size <code>(m+1)(n+1)</code>, it calculates exactly whether it needs an <strong>odd or even</strong> number of long chains to guarantee it gets the final move of the game.</p>
             </div>
             <p id="error-msg" class="error-text"></p>
         </div>

@@ -2,29 +2,33 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 
-// setup express and socket.io server
+// Standard express and socket setup
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.static('public'));
 
-// global state to hold active games and available colors
+// Active game states and fallback colors
 const rooms = {};
 const palette = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#ec4899'];
 
-// advanced bot logic based on the UCLA / Berlekamp algorithm
+// Main AI logic based on Berlekamp's Dots & Boxes algorithms
 function getBotMove(room) {
     const size = room.boardSize;
     const m = size - 1; 
     const n = size - 1; 
+    
+    // Quick lookup for past moves
     const history = new Set(room.moveHistory);
 
-    // map the board state into 2D arrays to track drawn lines and completed boxes
+    // Map board state to matrices (1 = drawn line, 0 = empty)
     const hedge = Array.from({length: m+1}, (_, i) =>
         Array.from({length: n}, (_, j) => history.has(`h-${i}-${j}`) ? 1 : 0));
     const vedge = Array.from({length: m}, (_, i) =>
         Array.from({length: n+1}, (_, j) => history.has(`v-${i}-${j}`) ? 1 : 0));
+        
+    // Count lines around each box
     const box = Array.from({length: m}, (_, i) =>
         Array.from({length: n}, (_, j) =>
             hedge[i][j] + hedge[i+1][j] + vedge[i][j] + vedge[i][j+1]));
@@ -32,7 +36,7 @@ function getBotMove(room) {
     let x, y, zz, u, v, count, loop;
     let result = null;
 
-    // helpers to simulate making a move internally
+    // Internal simulation helpers
     function sethedge(i, j) {
         if (result === null) result = `h-${i}-${j}`;
         hedge[i][j] = 1;
@@ -52,7 +56,7 @@ function getBotMove(room) {
         else sethedge(xi, yi); 
     }
 
-    // checks if a move is safe (won't hand a box to the opponent)
+    // Check if playing a line gives away a box
     function safehedge(i, j) {
         if (hedge[i][j]) return false;
         if (i === 0) return box[i][j] < 2;
@@ -67,7 +71,7 @@ function getBotMove(room) {
         return box[i][j] < 2 && box[i][j-1] < 2;
     }
 
-    // scans the board for boxes that are one line away from being captured
+    // Find boxes that are 1 line away from completion
     function sides3() {
         for (let i = 0; i < m; i++) for (let j = 0; j < n; j++)
             if (box[i][j] === 3) { u = i; v = j; return true; }
@@ -80,7 +84,7 @@ function getBotMove(room) {
         return false;
     }
 
-    // greedily capture boxes unless taking it opens up a new box for the opponent
+    // Greedily take 3-sided boxes, unless it opens up a bad chain
     function takesafe3s() {
         for (let i = 0; i < m; i++) {
             for (let j = 0; j < n; j++) {
@@ -94,7 +98,6 @@ function getBotMove(room) {
         }
     }
 
-    // automatically grabs the missing line of a 3-sided box
     function takebox(i, j) {
         if (!hedge[i][j]) sethedge(i, j);
         else if (!vedge[i][j]) setvedge(i, j);
@@ -105,16 +108,29 @@ function getBotMove(room) {
     function takeall3s() { while (sides3()) takebox(u, v); }
     function takeallbut(xi, yi) { while (sides3not(xi, yi)) takebox(u, v); }
 
-    // finds completely safe moves to keep the game going
+    // Find completely safe moves and pick one at random
     function sides01() {
-        for (let i = 0; i <= m; i++) for (let j = 0; j < n; j++)
-            if (safehedge(i, j)) { zz = 1; x = i; y = j; return true; }
-        for (let i = 0; i < m; i++) for (let j = 0; j <= n; j++)
-            if (safevedge(i, j)) { zz = 2; x = i; y = j; return true; }
+        let safeOptions = [];
+        for (let i = 0; i <= m; i++) {
+            for (let j = 0; j < n; j++) {
+                if (safehedge(i, j)) safeOptions.push({ zz: 1, x: i, y: j });
+            }
+        }
+        for (let i = 0; i < m; i++) {
+            for (let j = 0; j <= n; j++) {
+                if (safevedge(i, j)) safeOptions.push({ zz: 2, x: i, y: j });
+            }
+        }
+
+        if (safeOptions.length > 0) {
+            const pick = safeOptions[Math.floor(Math.random() * safeOptions.length)];
+            zz = pick.zz; x = pick.x; y = pick.y;
+            return true;
+        }
         return false;
     }
 
-    // forces the opponent to take exactly one box
+    // Force opponent to take a single box (minimal damage)
     function singleton() {
         for (let i = 0; i < m; i++) {
             for (let j = 0; j < n; j++) {
@@ -129,7 +145,8 @@ function getBotMove(room) {
         return false;
     }
 
-    // the classic berlekamp "double-cross" sacrifice logic
+    // The "Double-Cross" sacrifice: leave exactly 2 boxes in a long chain
+    // to force the opponent to open the next one.
     function ldub(i,j) {
         if (!vedge[i][j])   { if (j < 1   || box[i][j-1] < 2)   return true; }
         else if (!hedge[i][j])   { if (i < 1   || box[i-1][j] < 2)   return true; }
@@ -166,7 +183,7 @@ function getBotMove(room) {
         return false;
     }
 
-    // trace out the length of a chain to see if we should trap the player
+    // Trace the length of a chain
     function incount(k, i, j) {
         count++;
         if      (k!==1 && !vedge[i][j]   && j>0)   { if (box[i][j-1]>2) { count++; loop=true; } else if (box[i][j-1]>1) incount(3,i,j-1); }
@@ -175,7 +192,7 @@ function getBotMove(room) {
         else if (k!==4 && !hedge[i+1][j] && i<m-1) { if (box[i+1][j]>2) { count++; loop=true; } else if (box[i+1][j]>1) incount(2,i+1,j); }
     }
 
-    // traverse the chain and execute the double-cross
+    // Execute the double-cross sequence
     function outcount(k, i, j) {
         if (count <= 0) return;
         if      (k!==1 && !vedge[i][j]   && j>0)   { if (count!==2) setvedge(i,j);   count--; outcount(3,i,j-1); }
@@ -184,7 +201,7 @@ function getBotMove(room) {
         else if (k!==4 && !hedge[i+1][j] && i<m-1) { if (count!==2) sethedge(i+1,j); count--; outcount(2,i+1,j); }
     }
 
-    // forces the opponent into the next long chain
+    // Decide whether to take the whole chain or sacrifice the last two
     function sac(i, j) {
         count = 0; loop = false;
         incount(0, i, j);
@@ -195,27 +212,43 @@ function getBotMove(room) {
         else { if (loop) count -= 2; outcount(0, i, j); }
     }
 
+    // Absolute fallback: pick a random empty line
     function makeanymove() {
-        for (let i = 0; i <= m; i++) for (let j = 0; j < n; j++) if (!hedge[i][j]) { sethedge(i,j); return; }
-        for (let i = 0; i < m; i++) for (let j = 0; j <= n; j++) if (!vedge[i][j]) { setvedge(i,j); return; }
+        let anyOptions = [];
+        for (let i = 0; i <= m; i++) {
+            for (let j = 0; j < n; j++) {
+                if (!hedge[i][j]) anyOptions.push({ type: 'h', i, j });
+            }
+        }
+        for (let i = 0; i < m; i++) {
+            for (let j = 0; j <= n; j++) {
+                if (!vedge[i][j]) anyOptions.push({ type: 'v', i, j });
+            }
+        }
+
+        if (anyOptions.length > 0) {
+            const pick = anyOptions[Math.floor(Math.random() * anyOptions.length)];
+            if (pick.type === 'h') sethedge(pick.i, pick.j);
+            else setvedge(pick.i, pick.j);
+        }
     }
 
-    // execute the decision tree
-    takesafe3s();
+    // Evaluate strategies in priority order
+    takesafe3s(); // 1. Take free safe boxes
     if (result) return result;
 
     if (sides3()) {
         if (sides01()) { takeall3s(); takeedge(zz, x, y); }
-        else           { sac(u, v); }
-    } else if (sides01())  { takeedge(zz, x, y); }
-    else if (singleton())  { takeedge(zz, x, y); }
-    else if (doubleton())  { takeedge(zz, x, y); }
-    else                   { makeanymove(); }
+        else           { sac(u, v); } // 2. Handle chains/sacrifices
+    } else if (sides01())  { takeedge(zz, x, y); } // 3. Play safe
+    else if (singleton())  { takeedge(zz, x, y); } // 4. Give 1 box
+    else if (doubleton())  { takeedge(zz, x, y); } // 5. Setup double-cross
+    else                   { makeanymove(); }      // 6. Random fallback
 
     return result || room.availableLines[0];
 }
 
-// handles turn switching and boot players who go afk
+// Manage turn timers and AFK kicking
 function startTurnTimer(roomCode) {
     const room = rooms[roomCode];
     if (!room || !room.started) return; 
@@ -226,7 +259,7 @@ function startTurnTimer(roomCode) {
 
     const currentPlayer = room.players[room.currentTurnIndex || 0];
 
-    // bot delay so it feels like it's "thinking"
+    // Artificial delay so the bot doesn't move instantly
     if (currentPlayer && currentPlayer.isBot && !room.moveLocked) {
         room.moveLocked = true;
         setTimeout(() => {
@@ -242,7 +275,6 @@ function startTurnTimer(roomCode) {
         }, 350); 
     }
 
-    // main turn loop
     room.timerInterval = setInterval(() => {
         room.timeLeft--;
         io.to(roomCode).emit('timerUpdate', room.timeLeft);
@@ -253,7 +285,7 @@ function startTurnTimer(roomCode) {
             if (currentPlayer && !currentPlayer.isDead && !currentPlayer.isBot) {
                 currentPlayer.afkCount = (currentPlayer.afkCount || 0) + 1;
                 
-                // kick the player after 3 missed turns
+                // Kick player after 3 missed turns
                 if (currentPlayer.afkCount >= 3) {
                     currentPlayer.isDead = true;
                     const aliveCount = room.players.filter(p => !p.isDead).length;
@@ -268,7 +300,7 @@ function startTurnTimer(roomCode) {
                 }
             }
 
-            // force a random move if time runs out
+            // Force random move if time expires
             if (room.availableLines && room.availableLines.length > 0) {
                 room.moveLocked = true; 
                 const randomIndex = Math.floor(Math.random() * room.availableLines.length);
@@ -288,10 +320,10 @@ function stopTurnTimer(roomCode) {
     }
 }
 
-// handle socket connections
+// Handle socket connections
 io.on('connection', (socket) => {
     
-    // instantly spawn a 1v1 game against the computer
+    // Spin up a 1v1 match vs computer
     socket.on('createBotGame', (userData) => {
         const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
         const sessionId = Math.random().toString(36).substring(2, 15);
@@ -320,7 +352,7 @@ io.on('connection', (socket) => {
         startTurnTimer(roomCode);
     });
 
-    // create a standard multiplayer lobby
+    // Multiplayer room creation
     socket.on('createGame', (userData) => {
         const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
         const sessionId = Math.random().toString(36).substring(2, 15);
@@ -333,19 +365,18 @@ io.on('connection', (socket) => {
         io.to(roomCode).emit('lobbyUpdated', { roomCode, hostId: socket.id, players: room.players });
     });
 
-    // handles players joining via room code
+    // Join existing room
     socket.on('joinGame', (userData) => {
         const roomCode = userData.roomCode;
         if (!rooms[roomCode]) return socket.emit('errorMsg', 'Invalid Room Code.');
         const room = rooms[roomCode];
         
-        // allow them to spectate if the room is full or running
+        // Push as spectator if full/started
         if (room.started || room.players.length >= 4) {
             socket.join(roomCode);
             return socket.emit('spectatorJoined', { roomCode, boardSize: room.boardSize, players: room.players, moveHistory: room.moveHistory });
         }
 
-        // prevent players from picking the exact same color
         let finalColor = userData.color;
         const usedColors = room.players.map(p => p.color);
         if (usedColors.includes(finalColor)) finalColor = palette.find(c => !usedColors.includes(c)) || palette[0];
@@ -357,7 +388,7 @@ io.on('connection', (socket) => {
         io.to(roomCode).emit('lobbyUpdated', { roomCode, hostId: room.players[0].id, players: room.players });
     });
 
-    // allows players to quickly rejoin if they accidentally refresh the page
+    // Handle page refreshes smoothly
     socket.on('rejoinGame', (data) => {
         const room = rooms[data.roomCode];
         if (room) {
@@ -376,7 +407,7 @@ io.on('connection', (socket) => {
         socket.emit('errorMsg', 'Session expired. Please join as a new player.');
     });
 
-    // cleanup logic when a player bails
+    // Player disconnect cleanup
     socket.on('leaveRoom', (roomCode) => {
         const room = rooms[roomCode];
         if (room) {
@@ -391,7 +422,6 @@ io.on('connection', (socket) => {
                     const aliveCount = room.players.filter(p => !p.isDead).length;
                     io.to(roomCode).emit('playerLeft', { playerId: socket.id, reason: 'left' });
                     
-                    // end the game early if everyone leaves
                     if (aliveCount <= 1) {
                         const winner = room.players.find(p => !p.isDead);
                         if (winner) io.to(roomCode).emit('playerWonByDefault', winner);
@@ -403,6 +433,7 @@ io.on('connection', (socket) => {
         socket.leave(roomCode);
     });
 
+    // Start the match
     socket.on('startGame', (roomCode) => {
         const room = rooms[roomCode];
         if (room) {
@@ -412,7 +443,6 @@ io.on('connection', (socket) => {
             room.currentTurnIndex = 0; 
             room.moveLocked = false;
             
-            // generate the grid coordinate data
             for (let r = 0; r < room.boardSize; r++) {
                 for (let c = 0; c < room.boardSize; c++) {
                     if (c < room.boardSize - 1) room.availableLines.push(`h-${r}-${c}`);
@@ -425,7 +455,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // verifies and broadcasts moves to all clients
+    // Validate and broadcast moves
     socket.on('makeMove', ({ roomCode, lineId }) => {
         const room = rooms[roomCode];
         if (room && !room.moveLocked && room.availableLines.includes(lineId)) {
@@ -441,7 +471,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // client calls this after animations finish to kick off the next turn
+    // Keep clients and server in sync
     socket.on('syncTurn', ({ roomCode, turnIndex }) => {
         const room = rooms[roomCode];
         if (room) {
